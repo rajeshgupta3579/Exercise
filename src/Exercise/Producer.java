@@ -19,6 +19,7 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -192,7 +193,7 @@ public class Producer {
     public static void main(String[] args) throws Exception {
     	
         String dataSetFilePath = "../Datasets/green_tripdata_2017-01.csv";
-        public final BufferedReader br = null;
+        BufferedReader br = null;
         final String line = "";
         final String csvSplitBy = ",";
 
@@ -203,7 +204,7 @@ public class Producer {
         	System.out.println("DataSet Not Found");
             e.printStackTrace();
         }
-        
+        final BufferedReader finalBr = br;
         
         final KinesisProducer producer = getKinesisProducer();
         
@@ -239,16 +240,23 @@ public class Producer {
         // The lines within run() are the essence of the KPL API.
         final Runnable putOneRecord = new Runnable() {
             @Override
-            public void run() {      	
+            public void run() {  
+            	String line = "";
                 try {
-                    line = br.readLine();
+                    line = finalBr.readLine();
                     String[] fields = line.split(csvSplitBy);
                 }  catch (IOException e) {
                     e.printStackTrace();
                 } 
                 
 
-                ByteBuffer data = ByteBuffer.wrap(line.toString().getBytes("UTF-8"));
+                ByteBuffer data = null;
+				try {
+					data = ByteBuffer.wrap(line.toString().getBytes("UTF-8"));
+				} catch (UnsupportedEncodingException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
                 		
                 		//Utils.generateData(sequenceNumber.get(), DATA_SIZE);
                 // TIMESTAMP is our partition key
@@ -277,7 +285,7 @@ public class Producer {
         log.info(String.format(
                 "Starting puts... will run for %d seconds at %d records per second",
                 SECONDS_TO_RUN, RECORDS_PER_SECOND));
-        executeAtTargetRate(EXECUTOR, putOneRecord, sequenceNumber, SECONDS_TO_RUN, RECORDS_PER_SECOND);
+        executeAtTargetRate(EXECUTOR, putOneRecord, sequenceNumber, SECONDS_TO_RUN, RECORDS_PER_SECOND,finalBr);
         
         // Wait for puts to finish. After this statement returns, we have
         // finished all calls to putRecord, but the records may still be
@@ -331,7 +339,7 @@ public class Producer {
             final Runnable task,
             final AtomicLong counter,
             final int durationSeconds,
-            final int ratePerSecond) {
+            final int ratePerSecond, final BufferedReader br) {
         exec.scheduleWithFixedDelay(new Runnable() {
             final long startTime = System.nanoTime();
 
@@ -339,20 +347,6 @@ public class Producer {
             public void run() {
                 double secondsRun = (System.nanoTime() - startTime) / 1e9;
                 double targetCount = Math.min(durationSeconds, secondsRun) * ratePerSecond;
-                
-                /*while (counter.get() < targetCount) {
-                    counter.getAndIncrement();
-                    try {
-                        task.run();
-                    } catch (Exception e) {
-                        log.error("Error running task", e);
-                        System.exit(1);
-                    }
-                }
-                
-                if (secondsRun >= durationSeconds) {
-                    exec.shutdown();
-                }*/
                 
                 while (br != null) {
                     try {
