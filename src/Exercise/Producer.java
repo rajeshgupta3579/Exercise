@@ -71,6 +71,7 @@ import com.google.common.util.concurrent.ListenableFuture;
  * @author ruebe
  *
  */
+
 public class Producer {
     private static final Logger log = LoggerFactory.getLogger(Producer.class);
     
@@ -109,7 +110,7 @@ public class Producer {
     /**
      * Change this to your stream name.
      */
-    public static final String STREAM_NAME = "IncomingRequests";
+    public static final String STREAM_NAME = "IncomingCabRequests";
     
     /**
      * Change this to the region you are using.
@@ -185,6 +186,9 @@ public class Producer {
         // Note that if you do pass a Configuration instance, mutating that
         // instance after initializing KinesisProducer has no effect. We do not
         // support dynamic re-configuration at the moment.
+        
+        //To avoid Record has reached expiration issue
+        config.setRecordTtl(100000000);
         KinesisProducer producer = new KinesisProducer(config);
         
         return producer;
@@ -194,7 +198,6 @@ public class Producer {
     	
         String dataSetFilePath = "../Datasets/green_tripdata_2017-01.csv";
         BufferedReader br = null;
-        final String line = "";
         final String csvSplitBy = ",";
 
         try {
@@ -232,40 +235,36 @@ public class Producer {
             }
 
             @Override
-            public void onSuccess(UserRecordResult result) {
+            public void onSuccess(UserRecordResult result) {            	
                 completed.getAndIncrement();
             }
         };
         
-        // The lines within run() are the essence of the KPL API.
-        final Runnable putOneRecord = new Runnable() {
+        // The lines within run() are the essence of the KPL API.        
+       /* final Runnable putOneRecord = new Runnable() {
+        	
             @Override
             public void run() {  
             	String line = "";
-                try {
-                    line = finalBr.readLine();
-                    String[] fields = line.split(csvSplitBy);
-                }  catch (IOException e) {
-                    e.printStackTrace();
-                } 
+                String[] fields = line.split(csvSplitBy);
                 
 
                 ByteBuffer data = null;
 				try {
-					data = ByteBuffer.wrap(line.toString().getBytes("UTF-8"));
+					if(line != null)
+						data = ByteBuffer.wrap(line.getBytes("UTF-8"));
 				} catch (UnsupportedEncodingException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
                 		
-                		//Utils.generateData(sequenceNumber.get(), DATA_SIZE);
                 // TIMESTAMP is our partition key
                 ListenableFuture<UserRecordResult> f =
                         producer.addUserRecord(STREAM_NAME, TIMESTAMP, Utils.randomExplicitHashKey(), data);
                 Futures.addCallback(f, callback);
             }
         };
-        
+        */
         // This gives us progress updates
         EXECUTOR.scheduleAtFixedRate(new Runnable() {
             @Override
@@ -285,7 +284,55 @@ public class Producer {
         log.info(String.format(
                 "Starting puts... will run for %d seconds at %d records per second",
                 SECONDS_TO_RUN, RECORDS_PER_SECOND));
-        executeAtTargetRate(EXECUTOR, putOneRecord, sequenceNumber, SECONDS_TO_RUN, RECORDS_PER_SECOND,finalBr);
+        
+        
+        //executeAtTargetRate(EXECUTOR, putOneRecord, sequenceNumber, SECONDS_TO_RUN, RECORDS_PER_SECOND, finalBr);
+        
+        EXECUTOR.scheduleWithFixedDelay(new Runnable() {
+            final long startTime = System.nanoTime();
+
+            @Override
+            public void run() {
+                
+                String line;
+				try {
+					while ((line = finalBr.readLine())!= null) {
+						
+						final String finalLine = line;
+						
+					    try {
+					    	new Thread(new Runnable() {
+					    	    @Override
+					    	    public void run() {
+					    	    	
+					                String[] fields = finalLine.split(csvSplitBy);
+					                
+					                ByteBuffer data = null;
+									try {
+										data = ByteBuffer.wrap(finalLine.getBytes("UTF-8"));
+									} catch (UnsupportedEncodingException e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									}
+					                		
+					                // TIMESTAMP is our partition key
+					                ListenableFuture<UserRecordResult> f =
+					                        producer.addUserRecord(STREAM_NAME, TIMESTAMP, Utils.randomExplicitHashKey(), data);
+					                Futures.addCallback(f, callback);
+					    	    }
+					    	}).start();
+
+					    } catch (Exception e) {
+					        log.error("Error running task", e);
+					        System.exit(1);
+					    }
+					}
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+            }
+        }, 0, 1, TimeUnit.MILLISECONDS);
         
         // Wait for puts to finish. After this statement returns, we have
         // finished all calls to putRecord, but the records may still be
@@ -304,17 +351,17 @@ public class Producer {
         producer.flushSync();
         log.info("All records complete.");
         
-        if (br != null) {
-            try {
-                br.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+
+        /* try {
+            finalBr.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }*/
         
         // This kills the child process and shuts down the threads managing it.
         producer.destroy();
         log.info("Finished.");
+        EXECUTOR.shutdown();
     }
 
     /**
@@ -334,6 +381,8 @@ public class Producer {
      * @param ratePerSecond
      *            How many times to execute task per second
      */
+    
+    /*
     private static void executeAtTargetRate(
             final ScheduledExecutorService exec,
             final Runnable task,
@@ -348,17 +397,23 @@ public class Producer {
                 double secondsRun = (System.nanoTime() - startTime) / 1e9;
                 double targetCount = Math.min(durationSeconds, secondsRun) * ratePerSecond;
                 
-                while (br != null) {
-                    try {
-                        task.run();
-                    } catch (Exception e) {
-                        log.error("Error running task", e);
-                        System.exit(1);
-                    }
-                }
+                String line;
+				try {
+					while ((line = br.readLine())!= null) {
+					    try {
+					        task.run();
+					    } catch (Exception e) {
+					        log.error("Error running task", e);
+					        System.exit(1);
+					    }
+					}
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
             }
         }, 0, 1, TimeUnit.MILLISECONDS);
     }
-    
+    */
 
 }
