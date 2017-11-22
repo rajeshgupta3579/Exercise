@@ -287,7 +287,7 @@ public class Producer {
 										e.printStackTrace();
 									}
 					                		
-									System.out.println(Utils.randomExplicitHashKey());
+									//System.out.println(Utils.randomExplicitHashKey());
 									
 					                ListenableFuture<UserRecordResult> f =
 					                        producer.addUserRecord(STREAM_NAME, Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
