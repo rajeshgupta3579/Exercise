@@ -196,7 +196,7 @@ public class Producer {
     
     public static void main(String[] args) throws Exception {
     	
-        String dataSetFilePath = "../Datasets/green_tripdata_2017-01.csv";
+        String dataSetFilePath = "../Datasets/try.csv";
         BufferedReader br = null;
         final String csvSplitBy = ",";
 
@@ -240,31 +240,6 @@ public class Producer {
             }
         };
         
-        // The lines within run() are the essence of the KPL API.        
-       /* final Runnable putOneRecord = new Runnable() {
-        	
-            @Override
-            public void run() {  
-            	String line = "";
-                String[] fields = line.split(csvSplitBy);
-                
-
-                ByteBuffer data = null;
-				try {
-					if(line != null)
-						data = ByteBuffer.wrap(line.getBytes("UTF-8"));
-				} catch (UnsupportedEncodingException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-                		
-                // TIMESTAMP is our partition key
-                ListenableFuture<UserRecordResult> f =
-                        producer.addUserRecord(STREAM_NAME, TIMESTAMP, Utils.randomExplicitHashKey(), data);
-                Futures.addCallback(f, callback);
-            }
-        };
-        */
         // This gives us progress updates
         EXECUTOR.scheduleAtFixedRate(new Runnable() {
             @Override
@@ -284,9 +259,6 @@ public class Producer {
         log.info(String.format(
                 "Starting puts... will run for %d seconds at %d records per second",
                 SECONDS_TO_RUN, RECORDS_PER_SECOND));
-        
-        
-        //executeAtTargetRate(EXECUTOR, putOneRecord, sequenceNumber, SECONDS_TO_RUN, RECORDS_PER_SECOND, finalBr);
         
         EXECUTOR.scheduleWithFixedDelay(new Runnable() {
             final long startTime = System.nanoTime();
@@ -315,9 +287,10 @@ public class Producer {
 										e.printStackTrace();
 									}
 					                		
-					                // TIMESTAMP is our partition key
+									System.out.println(Utils.randomExplicitHashKey());
+									
 					                ListenableFuture<UserRecordResult> f =
-					                        producer.addUserRecord(STREAM_NAME, TIMESTAMP, Utils.randomExplicitHashKey(), data);
+					                        producer.addUserRecord(STREAM_NAME, Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
 					                Futures.addCallback(f, callback);
 					    	    }
 					    	}).start();
@@ -363,57 +336,5 @@ public class Producer {
         log.info("Finished.");
         EXECUTOR.shutdown();
     }
-
-    /**
-     * Executes a function N times per second for M seconds with a
-     * ScheduledExecutorService. The executor is shutdown at the end. This is
-     * more precise than simply using scheduleAtFixedRate.
-     * 
-     * @param exec
-     *            Executor
-     * @param task
-     *            Task to perform
-     * @param counter
-     *            Counter used to track how many times the task has been
-     *            executed
-     * @param durationSeconds
-     *            How many seconds to run for
-     * @param ratePerSecond
-     *            How many times to execute task per second
-     */
-    
-    /*
-    private static void executeAtTargetRate(
-            final ScheduledExecutorService exec,
-            final Runnable task,
-            final AtomicLong counter,
-            final int durationSeconds,
-            final int ratePerSecond, final BufferedReader br) {
-        exec.scheduleWithFixedDelay(new Runnable() {
-            final long startTime = System.nanoTime();
-
-            @Override
-            public void run() {
-                double secondsRun = (System.nanoTime() - startTime) / 1e9;
-                double targetCount = Math.min(durationSeconds, secondsRun) * ratePerSecond;
-                
-                String line;
-				try {
-					while ((line = br.readLine())!= null) {
-					    try {
-					        task.run();
-					    } catch (Exception e) {
-					        log.error("Error running task", e);
-					        System.exit(1);
-					    }
-					}
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-            }
-        }, 0, 1, TimeUnit.MILLISECONDS);
-    }
-    */
 
 }
