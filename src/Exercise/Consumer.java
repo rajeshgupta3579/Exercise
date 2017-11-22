@@ -22,6 +22,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,45 +39,6 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import com.amazonaws.services.kinesis.model.Record;
 
-/**
- * If you haven't looked at {@link Producer}, do so first.
- * 
- * <p>
- * As mentioned in SampleProducer, we will check that all records are received
- * correctly by the KCL by verifying that there are no gaps in the sequence
- * numbers.
- * 
- * <p>
- * As the consumer runs, it will periodically log a message indicating the
- * number of gaps it found in the sequence numbers. A gap is when the difference
- * between two consecutive elements in the sorted list of seen sequence numbers
- * is greater than 1.
- * 
- * <p>
- * Over time the number of gaps should converge to 0. You should also observe
- * that the range of sequence numbers seen is equal to the number of records put
- * by the SampleProducer.
- * 
- * <p>
- * If the stream contains data from multiple runs of SampleProducer, you should
- * observe the SampleConsumer detecting this and resetting state to only count
- * the latest run.
- * 
- * <p>
- * Note if you kill the SampleConsumer halfway and run it again, the number of
- * gaps may never converge to 0. This is because checkpoints may have been made
- * such that some records from the producer's latest run are not processed
- * again. If you observe this, simply run the producer to completion again
- * without terminating the consumer.
- * 
- * <p>
- * The consumer continues running until manually terminated, even if there are
- * no more records to consume.
- * 
- * @see Producer
- * @author chaodeng
- *
- */
 public class Consumer implements IRecordProcessorFactory {
     private static final Logger log = LoggerFactory.getLogger(Consumer.class);
     
@@ -97,65 +62,79 @@ public class Consumer implements IRecordProcessorFactory {
      * the data from multiple shards.
      */
     private class RecordProcessor implements IRecordProcessor {
+    	
+        private String kinesisShardId;
+    	
+    	 // Reporting interval
+        private static final long REPORTING_INTERVAL_MILLIS = 60000L; // 1 minute
+        private long nextReportingTimeInMillis;
+        
+        // Checkpointing interval
+        private static final long CHECKPOINT_INTERVAL_MILLIS = 60000L; // 1 minute
+        private long nextCheckpointTimeInMillis;
+        
+        
         @Override
-        public void initialize(String shardId) {}
+        public void initialize(String shardId) {
+        	log.info("Initializing record processor for shard: " + shardId);
+            this.kinesisShardId = shardId;
+            nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
+            nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
+        }
 
         @Override
         public void processRecords(List<Record> records, IRecordProcessorCheckpointer checkpointer) {
-            long timestamp = 0;
-            //List<Long> seqNos = new ArrayList<>();
             
             for (Record r : records) {
-                // Get the timestamp of this run from the partition key.
-                timestamp = Math.max(timestamp, Long.parseLong(r.getPartitionKey()));
-                
-                // Extract the sequence number. It's encoded as a decimal
-                // string and placed at the beginning of the record data,
-                // followed by a space. The rest of the record data is padding
-                // that we will simply discard.
+               
                 try {
+                	
                     byte[] b = new byte[r.getData().remaining()];
                     r.getData().get(b);
                     System.out.println(new String(b, "UTF-8"));
                     
-                    //seqNos.add(Long.parseLong(new String(b, "UTF-8").split(" ")[0]));
                 } catch (Exception e) {
                     log.error("Error parsing record", e);
                     System.exit(1);
                 }
             }
             
-            /*
-            synchronized (lock) {
-                if (largestTimestamp.get() < timestamp) {
-                    log.info(String.format(
-                            "Found new larger timestamp: %d (was %d), clearing state",
-                            timestamp, largestTimestamp.get()));
-                    largestTimestamp.set(timestamp);
-                    sequenceNumbers.clear();
-                }
-                
-                // Only add to the shared list if our data is from the latest run.
-                if (largestTimestamp.get() == timestamp) {
-                    sequenceNumbers.addAll(seqNos);
-                    Collections.sort(sequenceNumbers);
-                }
-            }*/
-            
-            try {
-                checkpointer.checkpoint();
-            } catch (Exception e) {
-                log.error("Error while trying to checkpoint during ProcessRecords", e);
+           
+            // If it is time to report stats as per the reporting interval, report stats
+            if (System.currentTimeMillis() > nextReportingTimeInMillis) {
+            	//Do Something
+                nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
             }
+
+            // Checkpoint once every checkpoint interval
+            if (System.currentTimeMillis() > nextCheckpointTimeInMillis) {
+                checkpoint(checkpointer);
+                nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
+            }
+
         }
 
         @Override
         public void shutdown(IRecordProcessorCheckpointer checkpointer, ShutdownReason reason) {
-            log.info("Shutting down, reason: " + reason);
+        	log.info("Shutting down record processor for shard: " + kinesisShardId + " , reason: " + reason);
+            checkpoint(checkpointer);
+        }
+        
+        private void checkpoint(IRecordProcessorCheckpointer checkpointer) {
+            log.info("Checkpointing shard " + kinesisShardId);
             try {
                 checkpointer.checkpoint();
+            } catch (ShutdownException se) {
+                // Ignore checkpoint if the processor instance has been shutdown (fail over).
+            	log.info("Caught shutdown exception, skipping checkpoint.", se);
+            } catch (ThrottlingException e) {
+                // Skip checkpoint when throttled. In practice, consider a backoff and retry policy.
+            	log.error("Caught throttling exception, skipping checkpoint.", e);
+            } catch (InvalidStateException e) {
+                // This indicates an issue with the DynamoDB table (check for table, provisioned IOPS).
+            	log.error("Cannot save checkpoint to the DynamoDB table used by the Amazon Kinesis Client Library.", e);
             } catch (Exception e) {
-                log.error("Error while trying to checkpoint during Shutdown", e);
+                log.error("Error while trying to checkpoint during ProcessRecords", e);
             }
         }
     }

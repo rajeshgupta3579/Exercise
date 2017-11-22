@@ -77,19 +77,6 @@ public class Producer {
     
     private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1);
     
-    /**
-     * Timestamp we'll attach to every record
-     */
-    private static final String TIMESTAMP = Long.toString(System.currentTimeMillis());
-    
-    /**
-     * Change these to try larger or smaller records.
-     */
-    private static final int DATA_SIZE = 128;
-    
-    /**
-     * Put records for this number of seconds before exiting.
-     */
     private static final int SECONDS_TO_RUN = 5;
     
     /**
@@ -198,7 +185,6 @@ public class Producer {
     	
         String dataSetFilePath = "../Datasets/try.csv";
         BufferedReader br = null;
-        final String csvSplitBy = ",";
 
         try {
             br = new BufferedReader(new FileReader(dataSetFilePath));            
@@ -245,13 +231,10 @@ public class Producer {
             @Override
             public void run() {
                 long put = sequenceNumber.get();
-                long total = RECORDS_PER_SECOND * SECONDS_TO_RUN;
-                double putPercent = 100.0 * put / total;
                 long done = completed.get();
-                double donePercent = 100.0 * done / total;
                 log.info(String.format(
-                        "Put %d of %d so far (%.2f %%), %d have completed (%.2f %%)",
-                        put, total, putPercent, done, donePercent));
+                        "Put %d so far, %d have completed",
+                        put, done  ));
             }
         }, 1, 1, TimeUnit.SECONDS);
         
@@ -261,7 +244,6 @@ public class Producer {
                 SECONDS_TO_RUN, RECORDS_PER_SECOND));
         
         EXECUTOR.scheduleWithFixedDelay(new Runnable() {
-            final long startTime = System.nanoTime();
 
             @Override
             public void run() {
@@ -277,7 +259,7 @@ public class Producer {
 					    	    @Override
 					    	    public void run() {
 					    	    	
-					                String[] fields = finalLine.split(csvSplitBy);
+					                //String[] fields = finalLine.split(csvSplitBy);
 					                
 					                ByteBuffer data = null;
 									try {
