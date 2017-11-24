@@ -15,12 +15,9 @@
 
 package Exercise;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Map;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
@@ -39,21 +36,13 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import com.amazonaws.services.kinesis.model.Record;
 
+ 
+
 public class Consumer implements IRecordProcessorFactory {
     private static final Logger log = LoggerFactory.getLogger(Consumer.class);
     
-    // All records from a run of the producer have the same timestamp in their
-    // partition keys. Since this value increases for each run, we can use it
-    // determine which run is the latest and disregard data from earlier runs.
-    private final AtomicLong largestTimestamp = new AtomicLong(0);
+    public static HashMap<String,Integer> hm; 
     
-    // List of record sequence numbers we have seen so far.
-    private final List<Long> sequenceNumbers = new ArrayList<>();
-    
-    // A mutex for largestTimestamp and sequenceNumbers. largestTimestamp is
-    // nevertheless an AtomicLong because we cannot capture non-final variables
-    // in the child class.
-    private final Object lock = new Object();
 
     /**
      * One instance of RecordProcessor is created for every shard in the stream.
@@ -61,12 +50,13 @@ public class Consumer implements IRecordProcessorFactory {
      * the enclosing SampleConsumer instance. This is a simple way to combine
      * the data from multiple shards.
      */
+    
     private class RecordProcessor implements IRecordProcessor {
     	
         private String kinesisShardId;
     	
     	 // Reporting interval
-        private static final long REPORTING_INTERVAL_MILLIS = 60000L; // 1 minute
+        private static final long REPORTING_INTERVAL_MILLIS = 30000L; // 1 minute
         private long nextReportingTimeInMillis;
         
         // Checkpointing interval
@@ -91,19 +81,31 @@ public class Consumer implements IRecordProcessorFactory {
                 	
                     byte[] b = new byte[r.getData().remaining()];
                     r.getData().get(b);
-                    System.out.println(new String(b, "UTF-8"));
+                    String geohash = new String(b,"UTF-8");
+                    Integer x = hm.get(geohash);
+                    if(x == null) {
+                    	Consumer.hm.put(geohash,1);
+                    }
+                    else {
+                    	Consumer.hm.put(geohash,x+1); 
+                    }  
                     
                 } catch (Exception e) {
                     log.error("Error parsing record", e);
                     System.exit(1);
                 }
-            }
+                
+            }         
             
-           
             // If it is time to report stats as per the reporting interval, report stats
             if (System.currentTimeMillis() > nextReportingTimeInMillis) {
-            	//Do Something
+            	//Consumer.hm.clear();
+            	System.out.println("--------------------------------------STATS----------------------------------------");
+            	for (Map.Entry<String,Integer> entry : Consumer.hm.entrySet()) {
+            		System.out.println(entry.getKey() + " : " + entry.getValue());
+            	}
                 nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
+                System.out.println("------------------------------------FINISHED----------------------------------------");
             }
 
             // Checkpoint once every checkpoint interval
@@ -139,37 +141,6 @@ public class Consumer implements IRecordProcessorFactory {
         }
     }
     
-    /**
-     * Log a message indicating the current state.
-     */
-    public void logResults() {
-        synchronized (lock) {
-            if (largestTimestamp.get() == 0) {
-                return;
-            }
-            
-            if (sequenceNumbers.size() == 0) {
-                log.info("No sequence numbers found for current run.");
-                return;
-            }
-            
-            // The producer assigns sequence numbers starting from 1, so we
-            // start counting from one before that, i.e. 0.
-            long last = 0;
-            long gaps = 0;
-            for (long sn : sequenceNumbers) {
-                if (sn - last > 1) {
-                    gaps++;
-                }
-                last = sn;
-            }
-            
-            log.info(String.format(
-                    "Found %d gaps in the sequence numbers. Lowest seen so far is %d, highest is %d",
-                    gaps, sequenceNumbers.get(0), sequenceNumbers.get(sequenceNumbers.size() - 1)));
-        }
-    }
-    
     @Override
     public IRecordProcessor createProcessor() {
         return this.new RecordProcessor();
@@ -178,21 +149,16 @@ public class Consumer implements IRecordProcessorFactory {
     public static void main(String[] args) {
         KinesisClientLibConfiguration config =
                 new KinesisClientLibConfiguration(
-                        "KinesisProducerLibSampleConsumer",
+                        "IncomingRequestsConsumer",
                         Producer.STREAM_NAME,
                         new DefaultAWSCredentialsProviderChain(),
-                        "KinesisProducerLibSampleConsumer")
+                        "IncomingRequestsConsumer")
                                 .withRegionName(Producer.REGION)
                                 .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON);
         
         final Consumer consumer = new Consumer();
         
-        Executors.newScheduledThreadPool(1).scheduleAtFixedRate(new Runnable() {
-            @Override
-            public void run() {
-                consumer.logResults();
-            }
-        }, 10, 1, TimeUnit.SECONDS);
+        Consumer.hm = new HashMap<String,Integer>();
         
         new Worker.Builder()
             .recordProcessorFactory(consumer)

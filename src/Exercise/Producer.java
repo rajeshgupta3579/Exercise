@@ -183,7 +183,7 @@ public class Producer {
     
     public static void main(String[] args) throws Exception {
     	
-        String dataSetFilePath = "../Datasets/try.csv";
+        String dataSetFilePath = "../Datasets/green_tripdata_2016-01.csv";
         BufferedReader br = null;
 
         try {
@@ -196,9 +196,6 @@ public class Producer {
         final BufferedReader finalBr = br;
         
         final KinesisProducer producer = getKinesisProducer();
-        
-        // The monotonically increasing sequence number we will put in the data of each record
-        final AtomicLong sequenceNumber = new AtomicLong(0);
         
         // The number of records that have finished (either successfully put, or failed)
         final AtomicLong completed = new AtomicLong(0);
@@ -230,11 +227,10 @@ public class Producer {
         EXECUTOR.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
-                long put = sequenceNumber.get();
                 long done = completed.get();
                 log.info(String.format(
-                        "Put %d so far, %d have completed",
-                        put, done  ));
+                        "%d puts have completed",
+                        done  ));
             }
         }, 1, 1, TimeUnit.SECONDS);
         
@@ -259,18 +255,22 @@ public class Producer {
 					    	    @Override
 					    	    public void run() {
 					    	    	
-					                //String[] fields = finalLine.split(csvSplitBy);
+					                String[] fields = finalLine.split(",");
+					                
+					                double longitude = Double.parseDouble(fields[5]);
+					                double latitude = Double.parseDouble(fields[6]);
+					                GeoHash g = new GeoHash(latitude,longitude);
+					                g.sethashLength(6);
+					                String geo = g.getGeoHashBase32();
+					                //System.out.println(geo);
 					                
 					                ByteBuffer data = null;
 									try {
-										data = ByteBuffer.wrap(finalLine.getBytes("UTF-8"));
+										data = ByteBuffer.wrap(geo.getBytes("UTF-8"));
 									} catch (UnsupportedEncodingException e) {
 										// TODO Auto-generated catch block
 										e.printStackTrace();
 									}
-					                		
-									//System.out.println(Utils.randomExplicitHashKey());
-									
 					                ListenableFuture<UserRecordResult> f =
 					                        producer.addUserRecord(STREAM_NAME, Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
 					                Futures.addCallback(f, callback);
