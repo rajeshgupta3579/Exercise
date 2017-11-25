@@ -43,7 +43,7 @@ public class IncomingRequestWriter {
   private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1);
 
   public static void main(String[] args) throws Exception {
-    String dataSetFilePath = "../Datasets/green_tripdata_2016-01.csv";
+    String dataSetFilePath = "../Datasets/try.csv";
     BufferedReader br = null;
     try {
       br = new BufferedReader(new FileReader(dataSetFilePath));
@@ -82,10 +82,6 @@ public class IncomingRequestWriter {
         log.info(String.format("%d puts have completed", done));
       }
     }, 1, 1, TimeUnit.SECONDS);
-
-    // Kick off the puts
-    log.info(String.format("Starting puts... will run for %d seconds at %d records per second",
-        Constants.SECONDS_TO_RUN, Constants.RECORDS_PER_SECOND));
 
     EXECUTOR.scheduleWithFixedDelay(new Runnable() {
 
@@ -137,11 +133,16 @@ public class IncomingRequestWriter {
         }
       }
     }, 0, 1, TimeUnit.SECONDS);
-    EXECUTOR.awaitTermination(Constants.SECONDS_TO_RUN + 1, TimeUnit.SECONDS);
+    EXECUTOR.awaitTermination(1,TimeUnit.SECONDS);
     log.info("Waiting for remaining puts to finish...");
     producer.flushSync();
     log.info("All records complete.");
     producer.destroy();
+    try {
+    	br.close();
+    } catch (IOException e) {
+    	e.printStackTrace();
+    }
     log.info("Finished.");
     EXECUTOR.shutdown();
   }

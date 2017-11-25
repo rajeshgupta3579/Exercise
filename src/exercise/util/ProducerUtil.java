@@ -22,6 +22,7 @@ import com.amazonaws.services.kinesis.producer.KinesisProducerConfiguration;
 public class ProducerUtil {
 	public static KinesisProducer getKinesisProducer() {
         KinesisProducerConfiguration config = new KinesisProducerConfiguration();
+        config.setRegion(Constants.REGION);
         config.setCredentialsRefreshDelay(100);
         config.setCredentialsProvider(new DefaultAWSCredentialsProviderChain());
         config.setMaxConnections(1);
