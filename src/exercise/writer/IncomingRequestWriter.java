@@ -21,10 +21,10 @@ import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import exercise.processor.GeoHash;
-import exercise.processor.Utils;
 import exercise.util.Constants;
+import exercise.util.GeoHash;
 import exercise.util.ProducerUtil;
+import exercise.util.Utils;
 
 public class IncomingRequestWriter {
   private static final Logger log = LoggerFactory.getLogger(IncomingRequestWriter.class);
