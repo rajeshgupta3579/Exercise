@@ -69,7 +69,7 @@ public class IncomingRequestWriter {
         long done = completed.get();
         log.info(String.format("%d puts have completed", done));
       }
-    }, 1, 5, TimeUnit.SECONDS);
+    }, 1, 20, TimeUnit.SECONDS);
     boolean condition = true;
     while (condition) {
       String line;

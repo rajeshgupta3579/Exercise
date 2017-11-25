@@ -1,8 +1,8 @@
 package exercise.processor;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
@@ -18,11 +18,14 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
 import com.amazonaws.services.kinesis.model.Record;
 import exercise.util.Constants;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 
 
 public class IncomingRequestProcessor implements IRecordProcessorFactory {
   private static final Logger log = LoggerFactory.getLogger(IncomingRequestProcessor.class);
-  public static HashMap<String, Integer> hm;
+  private static final JedisPool jedisPool =
+      new JedisPool(Constants.REDIS_HOST, Constants.REDIS_PORT);
 
   private class RecordProcessor implements IRecordProcessor {
     private String kinesisShardId;
@@ -46,32 +49,45 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
           byte[] b = new byte[r.getData().remaining()];
           r.getData().get(b);
           String geohash = new String(b, "UTF-8");
-          Integer x = hm.get(geohash);
-          if (x == null) {
-            IncomingRequestProcessor.hm.put(geohash, 1);
-          } else {
-            IncomingRequestProcessor.hm.put(geohash, x + 1);
-          }
+          incrementCountForGeoHash(geohash);
         } catch (Exception e) {
           log.error("Error parsing record", e);
           System.exit(1);
         }
       }
+
       if (System.currentTimeMillis() > nextReportingTimeInMillis) {
-        System.out.println(
-            "--------------------------------------STATS----------------------------------------");
-        for (Map.Entry<String, Integer> entry : IncomingRequestProcessor.hm.entrySet()) {
-          System.out.println(entry.getKey() + " : " + entry.getValue());
-        }
-        nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
-        System.out.println(
-            "------------------------------------FINISHED----------------------------------------");
+        publishDataFromJedis();
       }
       if (System.currentTimeMillis() > nextCheckpointTimeInMillis) {
         checkpoint(checkpointer);
         nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
       }
 
+    }
+
+    private void publishDataFromJedis() {
+      System.out.println(
+          "--------------------------------------STATS----------------------------------------");
+      Jedis jedis = jedisPool.getResource();
+      Set<String> setOfKeys = jedis.keys("*");
+      for (String key : setOfKeys) {
+        System.out.println(jedis.get(key));
+      }
+      nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
+      System.out.println(
+          "------------------------------------FINISHED----------------------------------------");
+    }
+
+    private void incrementCountForGeoHash(String geohash) {
+      Jedis jedis = jedisPool.getResource();
+      String count = jedis.get(geohash);
+      if (StringUtils.isEmpty(count)) {
+        jedis.set(geohash, "1");
+      } else {
+        Integer countInt = Integer.parseInt(count);
+        jedis.set(geohash, String.valueOf(countInt + 1));
+      }
     }
 
     @Override
@@ -115,9 +131,6 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
                 .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON);
 
     final IncomingRequestProcessor consumer = new IncomingRequestProcessor();
-
-    IncomingRequestProcessor.hm = new HashMap<String, Integer>();
-
     new Worker.Builder().recordProcessorFactory(consumer).config(config).build().run();
   }
 }
