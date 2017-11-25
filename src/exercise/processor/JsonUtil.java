@@ -1,4 +1,4 @@
-package Exercise;
+package exercise.processor;
 
 import java.io.IOException;
 import java.util.HashMap;

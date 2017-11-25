@@ -1,4 +1,4 @@
-package Exercise;
+package exercise.processor;
 
 public class  Location {   
     public static final double  MINLAT = - 90 ;     

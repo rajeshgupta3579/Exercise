@@ -13,7 +13,7 @@
  * permissions and limitations under the License.
  */
 
-package Exercise;
+package exercise.util;
 
 import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
