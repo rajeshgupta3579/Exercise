@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.commons.lang.math.RandomUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.amazonaws.services.kinesis.producer.Attempt;
@@ -68,47 +69,43 @@ public class IncomingRequestWriter {
         long done = completed.get();
         log.info(String.format("%d puts have completed", done));
       }
-    }, 1, 1, TimeUnit.SECONDS);
-
-    EXECUTOR.scheduleWithFixedDelay(new Runnable() {
-
-      @Override
-      public void run() {
-
-        String line;
-        try {
-          if ((line = finalBr.readLine()) != null) {
-            final String finalLine = line;
-            String[] fields = finalLine.split(",");
-            double longitude = Double.parseDouble(fields[5]);
-            double latitude = Double.parseDouble(fields[6]);
-            GeoHash g = new GeoHash(latitude, longitude);
-            g.sethashLength(6);
-            String geo = g.getGeoHashBase32();
-            // System.out.println(geo);
-            ByteBuffer data = null;
-            try {
-              data = ByteBuffer.wrap(geo.getBytes("UTF-8"));
-            } catch (UnsupportedEncodingException e) {
-              // TODO Auto-generated catch block
-              e.printStackTrace();
-            }
-            ListenableFuture<UserRecordResult> f =
-                producer.addUserRecord(Constants.INCOMING_REQUEST_STREAM_NAME,
-                    Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
-            Futures.addCallback(f, callback);
+    }, 1, 5, TimeUnit.SECONDS);
+    boolean condition = true;
+    while (condition) {
+      String line;
+      try {
+        if ((line = finalBr.readLine()) != null) {
+          final String finalLine = line;
+          String[] fields = finalLine.split(",");
+          double longitude = Double.parseDouble(fields[5]);
+          double latitude = Double.parseDouble(fields[6]);
+          GeoHash g = new GeoHash(latitude, longitude);
+          g.sethashLength(6);
+          String geo = g.getGeoHashBase32();
+          // System.out.println(geo);
+          ByteBuffer data = null;
+          try {
+            data = ByteBuffer.wrap(geo.getBytes("UTF-8"));
+          } catch (UnsupportedEncodingException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
           }
-        } catch (IOException e) {
-          // TODO Auto-generated catch block
-          e.printStackTrace();
+          ListenableFuture<UserRecordResult> f =
+              producer.addUserRecord(Constants.INCOMING_REQUEST_STREAM_NAME,
+                  Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
+          Futures.addCallback(f, callback);
+        } else {
+          condition = false;
         }
+      } catch (IOException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
       }
-    }, 0, 1, TimeUnit.MILLISECONDS);
-    // EXECUTOR.awaitTermination(10, TimeUnit.SECONDS);
-    log.info("Waiting for remaining puts to finish...");
-    Thread.sleep(100);
+      Thread.sleep(RandomUtils.nextInt() % 3000);
+    }
     producer.flushSync();
-    log.info("All records complete.");
+    log.info("Waiting for remaining puts to finish...");
+    log.info(String.format("All records complete - %d.", completed.get()));
     producer.destroy();
     try {
       br.close();

@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.commons.lang.math.RandomUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.amazonaws.services.kinesis.producer.Attempt;
@@ -68,28 +69,23 @@ public class DriverLocationWriter {
         long done = completed.get();
         log.info(String.format("%d puts have completed", done));
       }
-    }, 1, 1, TimeUnit.SECONDS);
-
-    EXECUTOR.scheduleWithFixedDelay(new Runnable() {
-
-      @Override
-      public void run() {
-
-        String line;
+    }, 1, 5, TimeUnit.SECONDS);
+    boolean condition = true;
+    while (condition) {
+      String line;
+      int driverCount = Constants.MIN_DRIVER_COUNT
+          + RandomUtils.nextInt() % (Constants.MAX_DRIVER_COUNT - Constants.MIN_DRIVER_COUNT);
+      for (int i = 0; i < driverCount; i++) {
         try {
           if ((line = finalBr.readLine()) != null) {
-
             final String finalLine = line;
-
             String[] fields = finalLine.split(",");
-
             double longitude = Double.parseDouble(fields[7]);
             double latitude = Double.parseDouble(fields[8]);
             GeoHash g = new GeoHash(latitude, longitude);
             g.sethashLength(6);
             String geo = g.getGeoHashBase32();
             // System.out.println(geo);
-
             ByteBuffer data = null;
             try {
               data = ByteBuffer.wrap(geo.getBytes("UTF-8"));
@@ -101,17 +97,19 @@ public class DriverLocationWriter {
                 producer.addUserRecord(Constants.DRIVER_LOCATION_STREAM_NAME,
                     Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
             Futures.addCallback(f, callback);
-
+          } else {
+            condition = false;
+            break;
           }
         } catch (IOException e) {
           // TODO Auto-generated catch block
           e.printStackTrace();
         }
       }
-    }, 0, 5, TimeUnit.SECONDS);
-    EXECUTOR.awaitTermination(1, TimeUnit.DAYS);
-    log.info("Waiting for remaining puts to finish...");
+      Thread.sleep(5000);
+    }
     producer.flushSync();
+    log.info("Waiting for remaining puts to finish...");
     log.info("All records complete.");
     producer.destroy();
     try {
@@ -122,5 +120,4 @@ public class DriverLocationWriter {
     log.info("Finished.");
     EXECUTOR.shutdown();
   }
-
 }
