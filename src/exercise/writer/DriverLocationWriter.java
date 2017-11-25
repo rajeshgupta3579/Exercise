@@ -6,10 +6,13 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 import org.apache.commons.lang.math.RandomUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,6 +76,8 @@ public class DriverLocationWriter {
     boolean condition = true;
     while (condition) {
       String line;
+      ByteBuffer data = null;
+      List<String> geoHashes = new ArrayList<>();
       int driverCount = Constants.MIN_DRIVER_COUNT
           + RandomUtils.nextInt() % (Constants.MAX_DRIVER_COUNT - Constants.MIN_DRIVER_COUNT);
       for (int i = 0; i < driverCount; i++) {
@@ -85,18 +90,7 @@ public class DriverLocationWriter {
             GeoHash g = new GeoHash(latitude, longitude);
             g.sethashLength(6);
             String geo = g.getGeoHashBase32();
-            // System.out.println(geo);
-            ByteBuffer data = null;
-            try {
-              data = ByteBuffer.wrap(geo.getBytes("UTF-8"));
-            } catch (UnsupportedEncodingException e) {
-              // TODO Auto-generated catch block
-              e.printStackTrace();
-            }
-            ListenableFuture<UserRecordResult> f =
-                producer.addUserRecord(Constants.DRIVER_LOCATION_STREAM_NAME,
-                    Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
-            Futures.addCallback(f, callback);
+            geoHashes.add(geo);
           } else {
             condition = false;
             break;
@@ -106,6 +100,17 @@ public class DriverLocationWriter {
           e.printStackTrace();
         }
       }
+      try {
+        data =
+            ByteBuffer.wrap(geoHashes.stream().collect(Collectors.joining(",")).getBytes("UTF-8"));
+      } catch (UnsupportedEncodingException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
+      ListenableFuture<UserRecordResult> f =
+          producer.addUserRecord(Constants.DRIVER_LOCATION_STREAM_NAME,
+              Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
+      Futures.addCallback(f, callback);
       Thread.sleep(5000);
     }
     producer.flushSync();
