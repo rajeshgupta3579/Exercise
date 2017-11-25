@@ -7,5 +7,6 @@ public class Constants {
   public static final String REGION = "eu-central-1";
   public static final int MAX_DRIVER_COUNT = 150;
   public static final int MIN_DRIVER_COUNT = 50;
-
+  public static final String INCOMING_REQUEST_APPLICATION_NAME = "IncomingRequestsConsumer";
+  public static final String DRIVER_LOCATION_APPLICATION_NAME = "IncomingRequestsConsumer";
 }
