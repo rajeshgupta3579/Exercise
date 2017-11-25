@@ -1,16 +1,3 @@
-/*
- * Copyright 2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
- *
- * Licensed under the Amazon Software License (the "License"). You may not use this file except in
- * compliance with the License. A copy of the License is located at
- *
- * http://aws.amazon.com/asl/
- *
- * or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
- */
-
 package exercise.writer;
 
 import java.io.BufferedReader;
@@ -43,7 +30,7 @@ public class IncomingRequestWriter {
   private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1);
 
   public static void main(String[] args) throws Exception {
-    String dataSetFilePath = "../Datasets/try.csv";
+    String dataSetFilePath = "../Datasets/dataset.csv";
     BufferedReader br = null;
     try {
       br = new BufferedReader(new FileReader(dataSetFilePath));
@@ -90,61 +77,45 @@ public class IncomingRequestWriter {
 
         String line;
         try {
-          while ((line = finalBr.readLine()) != null) {
-
+          if ((line = finalBr.readLine()) != null) {
             final String finalLine = line;
-
+            String[] fields = finalLine.split(",");
+            double longitude = Double.parseDouble(fields[5]);
+            double latitude = Double.parseDouble(fields[6]);
+            GeoHash g = new GeoHash(latitude, longitude);
+            g.sethashLength(6);
+            String geo = g.getGeoHashBase32();
+            // System.out.println(geo);
+            ByteBuffer data = null;
             try {
-              new Thread(new Runnable() {
-                @Override
-                public void run() {
-
-                  String[] fields = finalLine.split(",");
-
-                  double longitude = Double.parseDouble(fields[5]);
-                  double latitude = Double.parseDouble(fields[6]);
-                  GeoHash g = new GeoHash(latitude, longitude);
-                  g.sethashLength(6);
-                  String geo = g.getGeoHashBase32();
-                  // System.out.println(geo);
-
-                  ByteBuffer data = null;
-                  try {
-                    data = ByteBuffer.wrap(geo.getBytes("UTF-8"));
-                  } catch (UnsupportedEncodingException e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                  }
-                  ListenableFuture<UserRecordResult> f =
-                      producer.addUserRecord(Constants.STREAM_NAME, Utils.randomExplicitHashKey(),
-                          Utils.randomExplicitHashKey(), data);
-                  Futures.addCallback(f, callback);
-                }
-              }).start();
-
-            } catch (Exception e) {
-              log.error("Error running task", e);
-              System.exit(1);
+              data = ByteBuffer.wrap(geo.getBytes("UTF-8"));
+            } catch (UnsupportedEncodingException e) {
+              // TODO Auto-generated catch block
+              e.printStackTrace();
             }
+            ListenableFuture<UserRecordResult> f =
+                producer.addUserRecord(Constants.INCOMING_REQUEST_STREAM_NAME,
+                    Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
+            Futures.addCallback(f, callback);
           }
         } catch (IOException e) {
           // TODO Auto-generated catch block
           e.printStackTrace();
         }
       }
-    }, 0, 1, TimeUnit.SECONDS);
-    EXECUTOR.awaitTermination(1,TimeUnit.SECONDS);
+    }, 0, 1, TimeUnit.MILLISECONDS);
+    // EXECUTOR.awaitTermination(10, TimeUnit.SECONDS);
     log.info("Waiting for remaining puts to finish...");
+    Thread.sleep(100);
     producer.flushSync();
     log.info("All records complete.");
     producer.destroy();
     try {
-    	br.close();
+      br.close();
     } catch (IOException e) {
-    	e.printStackTrace();
+      e.printStackTrace();
     }
     log.info("Finished.");
     EXECUTOR.shutdown();
   }
-
 }

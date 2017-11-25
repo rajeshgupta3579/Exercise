@@ -1,111 +1,126 @@
 package exercise.writer;
 
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.regions.Region;
-import com.amazonaws.regions.RegionUtils;
-import com.amazonaws.services.kinesis.AmazonKinesis;
-import com.amazonaws.services.kinesis.AmazonKinesisClientBuilder;
-import com.amazonaws.services.kinesis.model.DescribeStreamResult;
-import com.amazonaws.services.kinesis.model.PutRecordRequest;
-import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
-import exercise.util.ConfigurationUtils;
-import exercise.util.CredentialUtils;
-import exercise.util.DriverLocation;
-import exercise.util.DriverLocationGenerator;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.amazonaws.services.kinesis.producer.Attempt;
+import com.amazonaws.services.kinesis.producer.KinesisProducer;
+import com.amazonaws.services.kinesis.producer.UserRecordFailedException;
+import com.amazonaws.services.kinesis.producer.UserRecordResult;
+import com.google.common.collect.Iterables;
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import exercise.processor.GeoHash;
+import exercise.processor.Utils;
+import exercise.util.Constants;
+import exercise.util.ProducerUtil;
 
-/**
- * Continuously sends simulated stock trades to Kinesis
- *
- */
 public class DriverLocationWriter {
-
-  private static final Log LOG = LogFactory.getLog(DriverLocationWriter.class);
-
-  /**
-   * Checks if the stream exists and is active
-   *
-   * @param kinesisClient Amazon Kinesis client instance
-   * @param streamName Name of stream
-   */
-  private static void validateStream(AmazonKinesis kinesisClient, String streamName) {
-    try {
-      DescribeStreamResult result = kinesisClient.describeStream(streamName);
-      if (!"ACTIVE".equals(result.getStreamDescription().getStreamStatus())) {
-        System.err.println(
-            "Stream " + streamName + " is not active. Please wait a few moments and try again.");
-        System.exit(1);
-      }
-    } catch (ResourceNotFoundException e) {
-      System.err
-          .println("Stream " + streamName + " does not exist. Please create it in the console.");
-      System.err.println(e);
-      System.exit(1);
-    } catch (Exception e) {
-      System.err.println("Error found while describing the stream " + streamName);
-      System.err.println(e);
-      System.exit(1);
-    }
-  }
-
-  /**
-   * Uses the Kinesis client to send the stock trade to the given stream.
-   *
-   * @param trade instance representing the stock trade
-   * @param kinesisClient Amazon Kinesis client
-   * @param streamName Name of stream
-   */
-  private static void sendStockTrade(DriverLocation trade, AmazonKinesis kinesisClient,
-      String streamName) {
-    byte[] bytes = trade.toJsonAsBytes();
-    // The bytes could be null if there is an issue with the JSON serialization by the Jackson JSON
-    // library.
-    if (bytes == null) {
-      LOG.warn("Could not get JSON bytes for stock trade");
-      return;
-    }
-
-    LOG.info("Putting trade: " + trade.toString());
-    PutRecordRequest putRecord = new PutRecordRequest();
-    putRecord.setStreamName(streamName);
-    // We use the ticker symbol as the partition key, as explained in the tutorial.
-    putRecord.setPartitionKey(trade.getTickerSymbol());
-    putRecord.setData(ByteBuffer.wrap(bytes));
-
-    try {
-      kinesisClient.putRecord(putRecord);
-    } catch (AmazonClientException ex) {
-      LOG.warn("Error sending record to Amazon Kinesis.", ex);
-    }
-  }
+  private static final Logger log = LoggerFactory.getLogger(DriverLocationWriter.class);
+  private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1);
 
   public static void main(String[] args) throws Exception {
-    String streamName = args[0];
-    String regionName = args[1];
-    Region region = RegionUtils.getRegion(regionName);
-    if (region == null) {
-      System.err.println(regionName + " is not a valid AWS region.");
-      System.exit(1);
+    String dataSetFilePath = "../Datasets/dataset.csv";
+    BufferedReader br = null;
+    try {
+      br = new BufferedReader(new FileReader(dataSetFilePath));
+    } catch (FileNotFoundException e) {
+      System.out.println("DataSet Not Found");
+      e.printStackTrace();
     }
-    AmazonKinesisClientBuilder clientBuilder = AmazonKinesisClientBuilder.standard();
-    clientBuilder.setRegion(regionName);
-    clientBuilder.setCredentials(CredentialUtils.getCredentialsProvider());
-    clientBuilder.setClientConfiguration(ConfigurationUtils.getClientConfigWithUserAgent());
+    final BufferedReader finalBr = br;
 
-    AmazonKinesis kinesisClient = clientBuilder.build();
+    final KinesisProducer producer = ProducerUtil.getKinesisProducer();
+    final AtomicLong completed = new AtomicLong(0);
+    final FutureCallback<UserRecordResult> callback = new FutureCallback<UserRecordResult>() {
+      @Override
+      public void onFailure(Throwable t) {
+        if (t instanceof UserRecordFailedException) {
+          Attempt last =
+              Iterables.getLast(((UserRecordFailedException) t).getResult().getAttempts());
+          log.error(String.format("Record failed to put - %s : %s", last.getErrorCode(),
+              last.getErrorMessage()));
+        }
+        log.error("Exception during put", t);
+        System.exit(1);
+      }
 
-    // Validate that the stream exists and is active
-    validateStream(kinesisClient, streamName);
+      @Override
+      public void onSuccess(UserRecordResult result) {
+        completed.getAndIncrement();
+      }
+    };
 
-    // Repeatedly send stock trades with a 100 milliseconds wait in between
-    DriverLocationGenerator driverLocationGenerator = new DriverLocationGenerator();
-    while (true) {
-      DriverLocation trade = driverLocationGenerator.getRandomTrade();
-      sendStockTrade(trade, kinesisClient, streamName);
-      Thread.sleep(100);
+    // This gives us progress updates
+    EXECUTOR.scheduleAtFixedRate(new Runnable() {
+      @Override
+      public void run() {
+        long done = completed.get();
+        log.info(String.format("%d puts have completed", done));
+      }
+    }, 1, 1, TimeUnit.SECONDS);
+
+    EXECUTOR.scheduleWithFixedDelay(new Runnable() {
+
+      @Override
+      public void run() {
+
+        String line;
+        try {
+          if ((line = finalBr.readLine()) != null) {
+
+            final String finalLine = line;
+
+            String[] fields = finalLine.split(",");
+
+            double longitude = Double.parseDouble(fields[7]);
+            double latitude = Double.parseDouble(fields[8]);
+            GeoHash g = new GeoHash(latitude, longitude);
+            g.sethashLength(6);
+            String geo = g.getGeoHashBase32();
+            // System.out.println(geo);
+
+            ByteBuffer data = null;
+            try {
+              data = ByteBuffer.wrap(geo.getBytes("UTF-8"));
+            } catch (UnsupportedEncodingException e) {
+              // TODO Auto-generated catch block
+              e.printStackTrace();
+            }
+            ListenableFuture<UserRecordResult> f =
+                producer.addUserRecord(Constants.DRIVER_LOCATION_STREAM_NAME,
+                    Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
+            Futures.addCallback(f, callback);
+
+          }
+        } catch (IOException e) {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        }
+      }
+    }, 0, 5, TimeUnit.SECONDS);
+    EXECUTOR.awaitTermination(1, TimeUnit.DAYS);
+    log.info("Waiting for remaining puts to finish...");
+    producer.flushSync();
+    log.info("All records complete.");
+    producer.destroy();
+    try {
+      br.close();
+    } catch (IOException e) {
+      e.printStackTrace();
     }
+    log.info("Finished.");
+    EXECUTOR.shutdown();
   }
 
 }

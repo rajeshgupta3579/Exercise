@@ -147,7 +147,7 @@ public class Consumer implements IRecordProcessorFactory {
 
   public static void main(String[] args) {
     KinesisClientLibConfiguration config =
-        new KinesisClientLibConfiguration("IncomingRequestsConsumer", Constants.STREAM_NAME,
+        new KinesisClientLibConfiguration("IncomingRequestsConsumer", Constants.INCOMING_REQUEST_STREAM_NAME,
             new DefaultAWSCredentialsProviderChain(), "IncomingRequestsConsumer")
                 .withRegionName(Constants.REGION)
                 .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON);
