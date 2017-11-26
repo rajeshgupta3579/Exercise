@@ -1,8 +1,7 @@
 package exercise.processor;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
@@ -18,17 +17,18 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
 import com.amazonaws.services.kinesis.model.Record;
 import exercise.util.Constants;
-
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 
 
 public class DriverLocationProcessor implements IRecordProcessorFactory {
   private static final Logger log = LoggerFactory.getLogger(DriverLocationProcessor.class);
-  public static HashMap<String, Integer> hm;
+  private static final JedisPool jedisPool =
+      new JedisPool(Constants.REDIS_HOST, Constants.REDIS_PORT);
+  Jedis jedis = jedisPool.getResource();
 
   private class RecordProcessor implements IRecordProcessor {
     private String kinesisShardId;
-    private static final long REPORTING_INTERVAL_MILLIS = 30000L; // 1 minute
-    private long nextReportingTimeInMillis;
     private static final long CHECKPOINT_INTERVAL_MILLIS = 60000L; // 1 minute
     private long nextCheckpointTimeInMillis;
 
@@ -36,43 +36,43 @@ public class DriverLocationProcessor implements IRecordProcessorFactory {
     public void initialize(String shardId) {
       log.info("Initializing record processor for shard: " + shardId);
       this.kinesisShardId = shardId;
-      nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
       nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
     }
 
     @Override
     public void processRecords(List<Record> records, IRecordProcessorCheckpointer checkpointer) {
+
+
       for (Record r : records) {
         try {
           byte[] b = new byte[r.getData().remaining()];
           r.getData().get(b);
-          String geohash = new String(b, "UTF-8");
-          Integer x = hm.get(geohash);
-          if (x == null) {
-            DriverLocationProcessor.hm.put(geohash, 1);
-          } else {
-            DriverLocationProcessor.hm.put(geohash, x + 1);
+          String geohashes = new String(b, "UTF-8");
+          String[] locationUpdates = geohashes.split(",");
+          for(String geohash : locationUpdates) {
+        	  incrementCountForGeoHash("dlu_" + geohash);
           }
         } catch (Exception e) {
           log.error("Error parsing record", e);
           System.exit(1);
         }
       }
-      if (System.currentTimeMillis() > nextReportingTimeInMillis) {
-        System.out.println(
-            "--------------------------------------STATS----------------------------------------");
-        for (Map.Entry<String, Integer> entry : DriverLocationProcessor.hm.entrySet()) {
-          System.out.println(entry.getKey() + " : " + entry.getValue());
-        }
-        nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
-        System.out.println(
-            "------------------------------------FINISHED----------------------------------------");
-      }
+
       if (System.currentTimeMillis() > nextCheckpointTimeInMillis) {
         checkpoint(checkpointer);
         nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
       }
 
+    }
+    
+    private void incrementCountForGeoHash(String geohash) {
+      String count = jedis.get(geohash);
+      if (StringUtils.isEmpty(count)) {
+        jedis.set(geohash, "1");
+      } else {
+        Integer countInt = Integer.parseInt(count);
+        jedis.set(geohash, String.valueOf(countInt + 1));
+      }
     }
 
     @Override
@@ -110,15 +110,12 @@ public class DriverLocationProcessor implements IRecordProcessorFactory {
 
   public static void main(String[] args) {
     KinesisClientLibConfiguration config =
-        new KinesisClientLibConfiguration(Constants.DRIVER_LOCATION_APPLICATION_NAME,
-            Constants.DRIVER_LOCATION_STREAM_NAME, new DefaultAWSCredentialsProviderChain(),
-            Constants.DRIVER_LOCATION_APPLICATION_NAME).withRegionName(Constants.REGION)
+        new KinesisClientLibConfiguration(Constants.INCOMING_REQUEST_APPLICATION_NAME,
+            Constants.INCOMING_REQUEST_STREAM_NAME, new DefaultAWSCredentialsProviderChain(),
+            Constants.INCOMING_REQUEST_APPLICATION_NAME).withRegionName(Constants.REGION)
                 .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON);
 
     final DriverLocationProcessor consumer = new DriverLocationProcessor();
-
-    DriverLocationProcessor.hm = new HashMap<String, Integer>();
-
     new Worker.Builder().recordProcessorFactory(consumer).config(config).build().run();
   }
 }

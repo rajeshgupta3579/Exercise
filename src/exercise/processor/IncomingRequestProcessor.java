@@ -28,8 +28,6 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
 
   private class RecordProcessor implements IRecordProcessor {
     private String kinesisShardId;
-    private static final long REPORTING_INTERVAL_MILLIS = 30000L; // 1 minute
-    private long nextReportingTimeInMillis;
     private static final long CHECKPOINT_INTERVAL_MILLIS = 60000L; // 1 minute
     private long nextCheckpointTimeInMillis;
 
@@ -37,7 +35,6 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
     public void initialize(String shardId) {
       log.info("Initializing record processor for shard: " + shardId);
       this.kinesisShardId = shardId;
-      nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
       nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
     }
 
@@ -51,34 +48,19 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
           byte[] b = new byte[r.getData().remaining()];
           r.getData().get(b);
           String geohash = new String(b, "UTF-8");
-          incrementCountForGeoHash(geohash, jedis);
+          incrementCountForGeoHash("icr_" + geohash, jedis);
         } catch (Exception e) {
           log.error("Error parsing record", e);
           System.exit(1);
         }
       }
 
-      if (System.currentTimeMillis() > nextReportingTimeInMillis) {
-        // publishDataFromJedis();
-        nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
-      }
       if (System.currentTimeMillis() > nextCheckpointTimeInMillis) {
         checkpoint(checkpointer);
         nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
       }
 
     }
-
-    // private void publishDataFromJedis() {
-    // System.out.println(
-    // "--------------------------------------STATS----------------------------------------");
-    // Set<String> setOfKeys = jedis.keys("*");
-    // for (String key : setOfKeys) {
-    // System.out.println(key + "->" + jedis.get(key));
-    // }
-    // System.out.println(
-    // "------------------------------------FINISHED----------------------------------------");
-    // }
 
     private void incrementCountForGeoHash(String geohash, Jedis jedis) {
       String count = jedis.get(geohash);
