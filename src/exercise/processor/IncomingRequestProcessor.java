@@ -1,7 +1,6 @@
 package exercise.processor;
 
 import java.util.List;
-import java.util.Set;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +25,6 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
   private static final Logger log = LoggerFactory.getLogger(IncomingRequestProcessor.class);
   private static final JedisPool jedisPool =
       new JedisPool(Constants.REDIS_HOST, Constants.REDIS_PORT);
-  Jedis jedis = jedisPool.getResource();
 
   private class RecordProcessor implements IRecordProcessor {
     private String kinesisShardId;
@@ -45,6 +43,7 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
 
     @Override
     public void processRecords(List<Record> records, IRecordProcessorCheckpointer checkpointer) {
+      Jedis jedis = jedisPool.getResource();
 
 
       for (Record r : records) {
@@ -52,7 +51,7 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
           byte[] b = new byte[r.getData().remaining()];
           r.getData().get(b);
           String geohash = new String(b, "UTF-8");
-          incrementCountForGeoHash(geohash);
+          incrementCountForGeoHash(geohash, jedis);
         } catch (Exception e) {
           log.error("Error parsing record", e);
           System.exit(1);
@@ -60,7 +59,7 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
       }
 
       if (System.currentTimeMillis() > nextReportingTimeInMillis) {
-        publishDataFromJedis();
+        // publishDataFromJedis();
         nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
       }
       if (System.currentTimeMillis() > nextCheckpointTimeInMillis) {
@@ -70,18 +69,18 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
 
     }
 
-    private void publishDataFromJedis() {
-      System.out.println(
-          "--------------------------------------STATS----------------------------------------");
-      Set<String> setOfKeys = jedis.keys("*");
-      for (String key : setOfKeys) {
-        System.out.println(key + "->" + jedis.get(key));
-      }
-      System.out.println(
-          "------------------------------------FINISHED----------------------------------------");
-    }
+    // private void publishDataFromJedis() {
+    // System.out.println(
+    // "--------------------------------------STATS----------------------------------------");
+    // Set<String> setOfKeys = jedis.keys("*");
+    // for (String key : setOfKeys) {
+    // System.out.println(key + "->" + jedis.get(key));
+    // }
+    // System.out.println(
+    // "------------------------------------FINISHED----------------------------------------");
+    // }
 
-    private void incrementCountForGeoHash(String geohash) {
+    private void incrementCountForGeoHash(String geohash, Jedis jedis) {
       String count = jedis.get(geohash);
       if (StringUtils.isEmpty(count)) {
         jedis.set(geohash, "1");
