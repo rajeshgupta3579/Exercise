@@ -3,21 +3,27 @@ var sock = io();
 
 (function init() {
   initMap();
-
+  sock.emit('updateView', function(data) {
+    sock.send('updateView');
+  });
   sock.on('coords', function(c) {
-    drawMarker(c.lat, c.lng);
+    drawMarker(c.lat, c.lng,c.value);
+  });
+  sock.on('clearView', function(c) {
+    var x = document.getElementsByClassName('leaflet-popup-close-button');
+    for(var i=0;i<x.length;i++){
+      x[i].click();
+    }
   });
 })();
 
-function drawMarker(lat, lng) {
-  //L.marker([lat, lng]).addTo(map);
-  L.circle([lat, lng], {
-    color: 'steelblue',
-    fillColor: 'steelblue',
-    fillOpacity: 0.5,
-    radius: 300
-  }).addTo(map);
-  
+function drawMarker(lat, lng,value) {
+  // L.marker(new L.LatLng(lat, lng)).bindPopup('Look revealing label!').openPopup().addTo(map);
+  // L.marker([lat,long]).bindPopup('Look revealing label!').openPopup().addTo(map);
+  var popup = L.popup().setLatLng([lat,lng]).setContent(value.toString());
+  map.addLayer(popup);
+  // L.popup().setLatLng([lat,lng]).setContent("1.2x").openOn(map);
+  // L.marker([lat,lng]).addTo(map).bindPopup("<b>1.2x</b>").openPopup();
 }
 
 function initMap() {
