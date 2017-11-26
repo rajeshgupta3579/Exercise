@@ -12,10 +12,10 @@ client.on('connect',function() {
 
 setInterval(() => {
   updateView();
-}, 1000);
+}, 10000);
 
 updateView = function(){
-  io.emit('clearView',{});
+  io.emit('clearView');
   client.keys('*', function (err, keys) {
     if (err) return console.log(err);
     if(keys){
@@ -42,11 +42,8 @@ const app = express();
 const httpServer = http.createServer(app);
 const io = require('socket.io')(httpServer);
 io.sockets.on('connection', function(socket){
-socket.on('updateView', function(data){
-        updateView();
-    });
-  }
-);
+   socket.on('updateView', updateView);
+});
 
 
 app.use(express.static(`${__dirname}/public`));

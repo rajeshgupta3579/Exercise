@@ -4,13 +4,11 @@ var layers = [];
 
 (function init() {
   initMap();
-  sock.emit('updateView', function(data) {
-    sock.send('updateView');
-  });
+  sock.emit('updateView');
   sock.on('coords', function(c) {
     drawMarker(c.lat, c.lng,c.value);
   });
-  sock.on('clearView', function(c) {
+  sock.on('clearView', function() {
     for(var i=0;i<layers.length;i++){
       map.removeLayer(layers[i]);
     }
