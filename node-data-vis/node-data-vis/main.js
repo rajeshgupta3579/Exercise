@@ -12,7 +12,7 @@ client.on('connect',function() {
 
 setInterval(() => {
   updateView();
-}, 10000);
+}, 1000);
 
 updateView = function(){
   io.emit('clearView',{});

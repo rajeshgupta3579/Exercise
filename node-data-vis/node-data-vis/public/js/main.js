@@ -1,5 +1,6 @@
 var map;
 var sock = io();
+var layers = [];
 
 (function init() {
   initMap();
@@ -10,9 +11,8 @@ var sock = io();
     drawMarker(c.lat, c.lng,c.value);
   });
   sock.on('clearView', function(c) {
-    var x = document.getElementsByClassName('leaflet-popup-close-button');
-    for(var i=0;i<x.length;i++){
-      x[i].click();
+    for(var i=0;i<layers.length;i++){
+      map.removeLayer(layers[i]);
     }
   });
 })();
@@ -20,12 +20,13 @@ var sock = io();
 function drawMarker(lat, lng,value) {
   // L.marker(new L.LatLng(lat, lng)).bindPopup('Look revealing label!').openPopup().addTo(map);
   // L.marker([lat,long]).bindPopup('Look revealing label!').openPopup().addTo(map);
-  L.circle([lat, lng], {
+  var layer = L.circle([lat, lng], {
     color: 'steelblue',
     fillColor: 'steelblue',
     fillOpacity: 0.5,
     radius: 300
   }).addTo(map);
+  layers.push(layer);
   // var popup = L.popup().setLatLng([lat,lng]).setContent(value.toString());
   // L.popup().setLatLng([lat,lng]).setContent("1.2x").openOn(map);
   // map.addLayer(popup);
