@@ -44,50 +44,53 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
 
     @Override
     public void processRecords(List<Record> records, IRecordProcessorCheckpointer checkpointer) {
+    	
+     Jedis jedis = jedisPool.getResource();
       for (Record r : records) {
         try {
           byte[] b = new byte[r.getData().remaining()];
           r.getData().get(b);
           String geohash = new String(b, "UTF-8");
-          incrementCountForGeoHash(geohash);
+          incrementCountForGeoHash(geohash,jedis);
         } catch (Exception e) {
           log.error("Error parsing record", e);
           System.exit(1);
         }
       }
-
+      System.out.println("------------------------HERE-----------------------------\n\n\n"
+      		+ System.currentTimeMillis() + "                    " + nextReportingTimeInMillis + "\n\n");
+      
       if (System.currentTimeMillis() > nextReportingTimeInMillis) {
-        publishDataFromJedis();
+    	  System.out.println("------------------------HERE-----------------------------\n\n\n\n\n");
+    	  publishDataFromJedis(jedis);
+    	  nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
       }
       if (System.currentTimeMillis() > nextCheckpointTimeInMillis) {
-        checkpoint(checkpointer);
-        nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
+    	  checkpoint(checkpointer);
+    	  nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
       }
 
     }
 
-    private void publishDataFromJedis() {
+    private void publishDataFromJedis(Jedis jedis) {
       System.out.println(
           "--------------------------------------STATS----------------------------------------");
-      Jedis jedis = jedisPool.getResource();
       Set<String> setOfKeys = jedis.keys("*");
       for (String key : setOfKeys) {
         System.out.println(jedis.get(key));
       }
-      nextReportingTimeInMillis = System.currentTimeMillis() + REPORTING_INTERVAL_MILLIS;
       System.out.println(
           "------------------------------------FINISHED----------------------------------------");
     }
 
-    private void incrementCountForGeoHash(String geohash) {
-      Jedis jedis = jedisPool.getResource();
-      String count = jedis.get(geohash);
-      if (StringUtils.isEmpty(count)) {
-        jedis.set(geohash, "1");
-      } else {
-        Integer countInt = Integer.parseInt(count);
-        jedis.set(geohash, String.valueOf(countInt + 1));
-      }
+    private void incrementCountForGeoHash(String geohash, Jedis jedis) {
+        String count = jedis.get(geohash);
+        if (StringUtils.isEmpty(count)) {
+          jedis.set(geohash, "1");
+        } else {
+          Integer countInt = Integer.parseInt(count);
+          jedis.set(geohash, String.valueOf(countInt + 1));
+        }
     }
 
     @Override

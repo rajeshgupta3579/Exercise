@@ -14,6 +14,6 @@ public class Constants {
    * Redis Connection config
    */
   public static final String REDIS_HOST =
-      "exercise-redis.i7wvyl.clustercfg.euc1.cache.amazonaws.com";
+      "localhost";
   public static final Integer REDIS_PORT = 6379;
 }
