@@ -4,7 +4,7 @@ var layers = [];
 
 (function init() {
   initMap();
-  sock.emit('updateView');
+  sock.emit('updateView',function(){});
   sock.on('coords', function(c) {
     drawMarker(c.lat, c.lng,c.value);
   });
@@ -16,19 +16,13 @@ var layers = [];
 })();
 
 function drawMarker(lat, lng,value) {
-  // L.marker(new L.LatLng(lat, lng)).bindPopup('Look revealing label!').openPopup().addTo(map);
-  // L.marker([lat,long]).bindPopup('Look revealing label!').openPopup().addTo(map);
-  var layer = L.circle([lat, lng], {
-    color: 'steelblue',
-    fillColor: 'steelblue',
-    fillOpacity: 0.5,
-    radius: 300
-  }).addTo(map);
-  layers.push(layer);
-  // var popup = L.popup().setLatLng([lat,lng]).setContent(value.toString());
-  // L.popup().setLatLng([lat,lng]).setContent("1.2x").openOn(map);
-  // map.addLayer(popup);
-  // L.marker([lat,lng]).addTo(map).bindPopup("<b>1.2x</b>").openPopup();
+
+  layers.push(L.marker([lat,lng]).bindLabel(value, {
+    noHide: true
+  }).addTo(map).showLabel());
+  // var circle = L.circle([lat,lng], 1000, {
+  //   fill: false
+  // }).addTo(map);
 }
 
 function initMap() {

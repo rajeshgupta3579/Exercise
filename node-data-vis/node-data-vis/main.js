@@ -4,7 +4,6 @@ const client = require('redis').createClient();
 const async = require('async');
 const geohash = require('ngeohash');
 
-
 client.on('connect',function() {
     updateView();
     console.log('connected');
@@ -12,7 +11,7 @@ client.on('connect',function() {
 
 setInterval(() => {
   updateView();
-}, 10000);
+}, 600000);
 
 updateView = function(){
   io.emit('clearView');
