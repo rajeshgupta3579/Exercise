@@ -47,6 +47,8 @@ public class SurgePricingProcessor {
             } else {
               surgePrice = Constants.MAX_SURGE_MULTIPLIER;
             }
+            Integer newDemand = Integer.min(0, demand - supply);
+            jedis.set(Constants.DEMAND_KEY_PREFIX + geohash, newDemand.toString());
             jedis.set(Constants.SURGE_PRICING_KEY_PREFIX + geohash, surgePrice.toString());
           }
 
