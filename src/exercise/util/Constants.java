@@ -9,11 +9,15 @@ public class Constants {
   public static final int MIN_DRIVER_COUNT = 50;
   public static final String INCOMING_REQUEST_APPLICATION_NAME = "IncomingRequestsConsumer";
   public static final String DRIVER_LOCATION_APPLICATION_NAME = "IncomingRequestsConsumer";
+  public static final String DEMAND_KEY_PREFIX = "demand_";
+  public static final String SUPPLY_KEY_PREFIX = "supply_";
+  public static final String SURGE_PRICING_KEY_PREFIX = "surge_";
+  public static final String DELIMITER = ";;;;";
 
   /**
    * Redis Connection config
    */
-  public static final String REDIS_HOST =
-      "localhost";
+  public static final String REDIS_HOST = "localhost";
   public static final Integer REDIS_PORT = 6379;
+
 }

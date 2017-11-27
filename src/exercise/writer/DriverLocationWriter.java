@@ -77,10 +77,12 @@ public class DriverLocationWriter {
     while (condition) {
       String line;
       ByteBuffer data = null;
-      List<String> geoHashes = new ArrayList<>();
+      List<String> locationUpdates = new ArrayList<>();
       int driverCount = Constants.MIN_DRIVER_COUNT
           + RandomUtils.nextInt() % (Constants.MAX_DRIVER_COUNT - Constants.MIN_DRIVER_COUNT);
+      int offSet = RandomUtils.nextInt();
       for (int i = 0; i < driverCount; i++) {
+        int driverId = (i + offSet) % Constants.MAX_DRIVER_COUNT;
         try {
           if ((line = finalBr.readLine()) != null) {
             final String finalLine = line;
@@ -90,7 +92,7 @@ public class DriverLocationWriter {
             GeoHash g = new GeoHash(latitude, longitude);
             g.sethashLength(6);
             String geo = g.getGeoHashBase32();
-            geoHashes.add(geo);
+            locationUpdates.add(geo + Constants.DELIMITER + driverId);
           } else {
             condition = false;
             break;
@@ -102,7 +104,7 @@ public class DriverLocationWriter {
       }
       try {
         data =
-            ByteBuffer.wrap(geoHashes.stream().collect(Collectors.joining(",")).getBytes("UTF-8"));
+            ByteBuffer.wrap(locationUpdates.stream().collect(Collectors.joining(",")).getBytes("UTF-8"));
       } catch (UnsupportedEncodingException e) {
         // TODO Auto-generated catch block
         e.printStackTrace();

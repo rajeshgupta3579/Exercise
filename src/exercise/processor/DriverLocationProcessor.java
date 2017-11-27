@@ -1,7 +1,6 @@
 package exercise.processor;
 
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
@@ -25,7 +24,6 @@ public class DriverLocationProcessor implements IRecordProcessorFactory {
   private static final Logger log = LoggerFactory.getLogger(DriverLocationProcessor.class);
   private static final JedisPool jedisPool =
       new JedisPool(Constants.REDIS_HOST, Constants.REDIS_PORT);
-  Jedis jedis = jedisPool.getResource();
 
   private class RecordProcessor implements IRecordProcessor {
     private String kinesisShardId;
@@ -41,16 +39,15 @@ public class DriverLocationProcessor implements IRecordProcessorFactory {
 
     @Override
     public void processRecords(List<Record> records, IRecordProcessorCheckpointer checkpointer) {
-
-
+      Jedis jedis = jedisPool.getResource();
       for (Record r : records) {
         try {
           byte[] b = new byte[r.getData().remaining()];
           r.getData().get(b);
-          String geohashes = new String(b, "UTF-8");
-          String[] locationUpdates = geohashes.split(",");
-          for(String geohash : locationUpdates) {
-        	  incrementCountForGeoHash("dlu_" + geohash);
+          String locationUpdateConcatenatedList = new String(b, "UTF-8");
+          String[] locationUpdates = locationUpdateConcatenatedList.split(",");
+          for (String locationUpdate : locationUpdates) {
+            updateLocation(locationUpdate, jedis);
           }
         } catch (Exception e) {
           log.error("Error parsing record", e);
@@ -62,17 +59,12 @@ public class DriverLocationProcessor implements IRecordProcessorFactory {
         checkpoint(checkpointer);
         nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
       }
-
     }
-    
-    private void incrementCountForGeoHash(String geohash) {
-      String count = jedis.get(geohash);
-      if (StringUtils.isEmpty(count)) {
-        jedis.set(geohash, "1");
-      } else {
-        Integer countInt = Integer.parseInt(count);
-        jedis.set(geohash, String.valueOf(countInt + 1));
-      }
+
+    private void updateLocation(String locationUpdate, Jedis jedis) {
+      String geohash = locationUpdate.split(Constants.DELIMITER)[0];
+      String driverId = locationUpdate.split(Constants.DELIMITER)[1];
+      jedis.set(Constants.SUPPLY_KEY_PREFIX + driverId, geohash);
     }
 
     @Override

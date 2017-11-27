@@ -48,7 +48,7 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
           byte[] b = new byte[r.getData().remaining()];
           r.getData().get(b);
           String geohash = new String(b, "UTF-8");
-          incrementCountForGeoHash("icr_" + geohash, jedis);
+          incrementCountForGeoHash(Constants.DEMAND_KEY_PREFIX + geohash, jedis);
         } catch (Exception e) {
           log.error("Error parsing record", e);
           System.exit(1);
