@@ -13,6 +13,8 @@ public class Constants {
   public static final String SUPPLY_KEY_PREFIX = "supply_";
   public static final String SURGE_PRICING_KEY_PREFIX = "surge_";
   public static final String DELIMITER = ";;;;";
+  public static final double MIN_SURGE_MULTIPLIER = 1;
+  public static final double MAX_SURGE_MULTIPLIER = 5;
 
   /**
    * Redis Connection config
