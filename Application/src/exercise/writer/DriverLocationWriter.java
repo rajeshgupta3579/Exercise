@@ -34,10 +34,9 @@ public class DriverLocationWriter {
   private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1);
 
   public static void main(String[] args) throws Exception {
-    String dataSetFilePath = "../Datasets/dataset.csv";
     BufferedReader br = null;
     try {
-      br = new BufferedReader(new FileReader(dataSetFilePath));
+      br = new BufferedReader(new FileReader(Constants.DATA_SET_FILE_PATH));
     } catch (FileNotFoundException e) {
       System.out.println("DataSet Not Found");
       e.printStackTrace();

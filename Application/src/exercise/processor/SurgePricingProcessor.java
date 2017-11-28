@@ -6,7 +6,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
@@ -15,7 +14,9 @@ import org.slf4j.LoggerFactory;
 import exercise.util.Constants;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-
+import java.sql.*;
+import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
 
 public class SurgePricingProcessor {
 	
@@ -25,6 +26,20 @@ public class SurgePricingProcessor {
       new JedisPool(Constants.REDIS_HOST, Constants.REDIS_PORT);
          
   public static void main(String[] args) {
+	  
+	final String jdbcUrl = "jdbc:" + Constants.DB_DRIVER_NAME + "://" + Constants.DB_HOST + ":" + Constants.DB_PORT + "/" + Constants.DB_NAME + "?user=" + Constants.DB_USER_NAME + "&password=" + Constants.DB_PASSWORD;
+	Connection conn = null;
+	try {
+		conn = DriverManager.getConnection(jdbcUrl, Constants.DB_USER_NAME, Constants.DB_PASSWORD);
+	} catch (SQLException e) {
+		log.info("Database Connection Error");
+		e.printStackTrace();
+		System.exit(1);
+	}
+	log.info("Connection to Database Established Successfully.");
+	final Connection finalConn = conn;
+
+	
     final Jedis jedis = jedisPool.getResource();
     EXECUTOR.scheduleAtFixedRate(new Runnable() {
       @Override
@@ -60,13 +75,31 @@ public class SurgePricingProcessor {
               surgePrice = Constants.MAX_SURGE_MULTIPLIER;
             }
             Double newDemand = Double.max(0.0, demand - supply);
-            System.out.println("GeoHash : " + geohash + " , Demand : " + demand + " , Supply : " + supply + " , Surge Price : " + surgePrice + " , New Demand : " + newDemand );
+            System.out.println("GeoHash : " + geohash + " , Demand : " + demand + " , Supply : " + supply + " , Surge Price : " + surgePrice + " , "
+            		+ "New Demand : " + newDemand );
+            
             jedis.set(Constants.DEMAND_KEY_PREFIX + geohash, newDemand.toString());
-			jedis.set(Constants.SURGE_PRICING_KEY_PREFIX + geohash, String.format("%2f",surgePrice.toString()));
+			jedis.set(Constants.SURGE_PRICING_KEY_PREFIX + geohash, new DecimalFormat("#0.00").format(surgePrice).toString());
+			
+			String timeStampStart = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss").format(new Timestamp(System.currentTimeMillis()));
+			
+			String sqlQuery = "insert into " + Constants.DB_TABLE_NAME + "(TimeStampStart, TimeStampEnd, GeoHash, SurgePrice) values(timestamp(\"" + timeStampStart + 
+					"\"), timestamp(\"" + timeStampStart + "\") + INTERVAL \'" + Constants.TIME_INTERVAL.toString() + "\' " + 
+					Constants.TIME_UNIT.toString().substring(0,Constants.TIME_UNIT.toString().length() -1) + ", \'" + geohash + "\' , \'" + surgePrice.toString() + "\');" ;
+			
+			//log.info(sqlQuery);
+			try {
+				Statement st = finalConn.createStatement();
+				st.executeUpdate(sqlQuery);
+			} catch (SQLException e) {
+				log.info("SQL Insert Error");
+				e.printStackTrace();
+			}
           }
         }
+        log.info("Data Inserted into Database Successfully.");
         log.info("--------------------------Finished--------------------------------");
       }
-    }, 0, 10, TimeUnit.MINUTES);
+    }, 0, Constants.TIME_INTERVAL, Constants.TIME_UNIT);
   }
 }
