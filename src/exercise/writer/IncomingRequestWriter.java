@@ -67,9 +67,10 @@ public class IncomingRequestWriter {
       @Override
       public void run() {
         long done = completed.get();
-        log.info(String.format("%d puts have completed", done));
+        log.info(String.format("%d puts have completed after 20 seconds", done));
       }
     }, 1, 20, TimeUnit.SECONDS);
+    
     boolean condition = true;
     while (condition) {
       String line;

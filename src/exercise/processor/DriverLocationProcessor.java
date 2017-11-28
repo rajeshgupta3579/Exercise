@@ -65,6 +65,7 @@ public class DriverLocationProcessor implements IRecordProcessorFactory {
       String geohash = locationUpdate.split(Constants.DELIMITER)[0];
       String driverId = locationUpdate.split(Constants.DELIMITER)[1];
       jedis.set(Constants.SUPPLY_KEY_PREFIX + driverId, geohash);
+      log.info("Written to Redis");
     }
 
     @Override
@@ -102,9 +103,9 @@ public class DriverLocationProcessor implements IRecordProcessorFactory {
 
   public static void main(String[] args) {
     KinesisClientLibConfiguration config =
-        new KinesisClientLibConfiguration(Constants.INCOMING_REQUEST_APPLICATION_NAME,
-            Constants.INCOMING_REQUEST_STREAM_NAME, new DefaultAWSCredentialsProviderChain(),
-            Constants.INCOMING_REQUEST_APPLICATION_NAME).withRegionName(Constants.REGION)
+        new KinesisClientLibConfiguration(Constants.DRIVER_LOCATION_APPLICATION_NAME,
+            Constants.DRIVER_LOCATION_STREAM_NAME, new DefaultAWSCredentialsProviderChain(),
+            Constants.DRIVER_LOCATION_APPLICATION_NAME).withRegionName(Constants.REGION)
                 .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON);
 
     final DriverLocationProcessor consumer = new DriverLocationProcessor();

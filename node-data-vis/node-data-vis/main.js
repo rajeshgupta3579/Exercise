@@ -5,36 +5,37 @@ const async = require('async');
 const geohash = require('ngeohash');
 
 client.on('connect',function() {
-    updateView();
     console.log('connected');
 });
 
+var timer = 60000;
+
 setInterval(() => {
   updateView();
-}, 600000);
+}, timer);
 
 updateView = function(){
   io.emit('clearView');
-  client.keys('*', function (err, keys) {
-    if (err) return console.log(err);
-    if(keys){
-          async.map(keys, function(key, cb) {
-             client.get(key, function (error, value) {
-                  if (error) return cb(error);
-                  var latlon = geohash.decode(key);
-                  io.emit('coords', {
-                    lat: latlon.latitude,
-                    lng: latlon.longitude,
-                    value: value
-                  });
-                  // console.log('Latitude : ' + latlon.latitude + ' , Longitude : ' + latlon.longitude + ' and Value : ' + value);
-              });
-          }, function (error, results) {
-             if (error) return console.log('error'+error);
-             console.log(results);
-          });
-    }
-  });
+  var SURGE_PRICING_KEY_PREFIX = 'surge_';
+  updateView = function(){
+    io.emit('clearView');
+    client.keys(SURGE_PRICING_KEY_PREFIX + '*', function (err, keys) {
+      if (err) return console.log(err);
+      if(keys){
+            async.map(keys, function(key, cb) {
+                client.get(key, function (error, value) {
+                    if (error) return cb(error);
+                    var latlon = geohash.decode(key.substr(SURGE_PRICING_KEY_PREFIX.length));
+                    io.emit('coords', {
+                      lat: latlon.latitude,
+                      lng: latlon.longitude,
+                      value: value
+                    });
+                });
+            });
+      }
+    });
+  }
 }
 
 const app = express();

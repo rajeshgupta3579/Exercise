@@ -17,7 +17,7 @@ var layers = [];
 
 function drawMarker(lat, lng,value) {
 
-  layers.push(L.marker([lat,lng]).bindLabel(value, {
+  layers.push(L.marker([lat,lng]).bindLabel(value + 'x', {
     noHide: true
   }).addTo(map).showLabel());
   // var circle = L.circle([lat,lng], 1000, {
