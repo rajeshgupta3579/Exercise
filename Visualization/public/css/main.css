@@ -1,5 +1,49 @@
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+input, button{
+    vertical-align:middle;
+}
 #map {
-    width: auto;
-    height: 750px;
-    margin: 10px auto;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+#footer {
+  position: fixed;
+  bottom: 0;
+  z-index: 2;
+  width: 99%;
+  background-color: rgba(0, 0, 0, 0.4);
+}
+#viewIcon {
+  width: 40px;
+  height: 40px;
+  margin-left: -10px;
+  margin-top: -3px;
+}
+#viewButton {
+  height: 30px;
+  width: 30px;
+  background-color: rgba(0, 0, 0, 0);
+  cursor: pointer;
+  border-radius: 20px;
+  border: none;
+}
+#viewButton:hover {
+  background-color: #f0f0f0;
+}
+#viewButton:focus {
+  outline: none;
+}
+#viewButton:active{
+  background-color: rgba(0, 0, 0, 0);
+  padding: 0px 0px 0px 4px;
+}
+.labelContainer {
+  background-color: rgba(255,255,255,0.8);
+}
+.labelText {
+  color: rgba(0,0,0,1);
 }

@@ -19,6 +19,7 @@
     "finalhandler": "^1.1.0",
     "fresh": "^0.5.2",
     "http-errors": "^1.6.2",
+    "leaflet-label": "^0.2.1-0",
     "leaflet-labeled-circle": "^1.0.1",
     "merge-descriptors": "^1.0.1",
     "methods": "^1.1.2",
