@@ -18,9 +18,9 @@ import java.sql.*;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 
-public class SurgePricingProcessor {
+public class ScheduledProcessor {
 	
-  private static final Logger log = LoggerFactory.getLogger(SurgePricingProcessor.class);
+  private static final Logger log = LoggerFactory.getLogger(ScheduledProcessor.class);
   private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1);
   private static final JedisPool jedisPool =
       new JedisPool(Constants.REDIS_HOST, Constants.REDIS_PORT);
@@ -47,6 +47,7 @@ public class SurgePricingProcessor {
     	log.info("------------------------Calculating Surge Price------------------------------");
         List<String> driverLocations = jedis.keys(Constants.SUPPLY_KEY_PREFIX + "*").stream()
             .map(key -> jedis.get(key)).collect(Collectors.toList());
+        
         Map<String, Integer> supplyCountMap = new HashMap<>();
         
         for (String location : driverLocations) {
@@ -74,7 +75,7 @@ public class SurgePricingProcessor {
             } else {
               surgePrice = Constants.MAX_SURGE_MULTIPLIER;
             }
-            Double newDemand = Double.max(0.0, demand - supply);
+            Double newDemand = Double.max(0.0, demand - supply);	
             System.out.println("GeoHash : " + geohash + " , Demand : " + demand + " , Supply : " + supply + " , Surge Price : " + surgePrice + " , "
             		+ "New Demand : " + newDemand );
             
@@ -83,9 +84,10 @@ public class SurgePricingProcessor {
 			
 			String timeStampStart = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss").format(new Timestamp(System.currentTimeMillis()));
 			
-			String sqlQuery = "insert into " + Constants.DB_TABLE_NAME + "(TimeStampStart, TimeStampEnd, GeoHash, SurgePrice) values(timestamp(\"" + timeStampStart + 
+			String sqlQuery = "insert into " + Constants.DB_TABLE_NAME + "(TimeStampStart, TimeStampEnd, GeoHash, Demand, Supply, SurgePrice) values(timestamp(\"" + timeStampStart + 
 					"\"), timestamp(\"" + timeStampStart + "\") + INTERVAL \'" + Constants.TIME_INTERVAL.toString() + "\' " + 
-					Constants.TIME_UNIT.toString().substring(0,Constants.TIME_UNIT.toString().length() -1) + ", \'" + geohash + "\' , \'" + surgePrice.toString() + "\');" ;
+					Constants.TIME_UNIT.toString().substring(0,Constants.TIME_UNIT.toString().length() -1) + ", \'" + geohash + 
+					"\', " + demand.toString() + ", " + supply.toString() + ", " + surgePrice.toString() + ");" ;
 			
 			//log.info(sqlQuery);
 			try {
@@ -95,7 +97,7 @@ public class SurgePricingProcessor {
 				log.info("SQL Insert Error");
 				e.printStackTrace();
 			}
-          }
+          }  
         }
         log.info("Data Inserted into Database Successfully.");
         log.info("--------------------------Finished--------------------------------");
