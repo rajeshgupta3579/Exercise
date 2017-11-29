@@ -3,9 +3,26 @@ const http = require('http');
 const client = require('redis').createClient();
 const async = require('async');
 const geohash = require('ngeohash');
+const mysql = require('mysql');
 
 client.on('connect',function() {
     console.log('connected');
+});
+
+var connection = mysql.createConnection({
+  userName: 'grabDB',
+  password: 'mainkyodassa',
+  host: 'grab-exercise-db-instance.coooavv2qtha.eu-central-1.rds.amazonaws.com',
+  port:3306,
+  database: 'GrabExercise'
+  });
+connection.connect(function(err) {
+  if (err) {
+    console.error('Database connection failed: ' + err.stack);
+    return;
+  }
+
+  console.log('Connected to database.');
 });
 
 var timer = 60000;
@@ -36,6 +53,10 @@ updateView = function(){
       }
     });
   }
+}
+
+updateBatchView = function(){
+  io.emit('clearView');
 }
 
 const app = express();

@@ -15,7 +15,12 @@ var layers = [];
 })();
 
 function updateMapView() {
-  console.log("Hello!");
+    if(document.getElementById('operation-type').value=='batch'){
+      sock.emit('updateBatchView',function(){});
+    }
+    else{
+      sock.emit('updateView',function(){});
+    }
 }
 
 function drawMarker(lat, lng, value) {
