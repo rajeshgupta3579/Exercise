@@ -41,8 +41,6 @@ public class DriverLocationWriter {
       System.out.println("DataSet Not Found");
       e.printStackTrace();
     }
-    final BufferedReader finalBr = br;
-
     final KinesisProducer producer = ProducerUtil.getKinesisProducer();
     final AtomicLong completed = new AtomicLong(0);
     final FutureCallback<UserRecordResult> callback = new FutureCallback<UserRecordResult>() {
@@ -84,9 +82,8 @@ public class DriverLocationWriter {
       for (int i = 0; i < driverCount; i++) {
         int driverId = (i + offSet) % Constants.MAX_DRIVER_COUNT;
         try {
-          if ((line = finalBr.readLine()) != null) {
-            final String finalLine = line;
-            String[] fields = finalLine.split(",");
+          if ((line = br.readLine()) != null) {
+            String[] fields = line.split(",");
             double longitude = Double.parseDouble(fields[0]);
             double latitude = Double.parseDouble(fields[1]);
             String geo = GeoHash.getGeoHashString(latitude, longitude);

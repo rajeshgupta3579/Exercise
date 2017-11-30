@@ -38,6 +38,8 @@ public class Constants {
   public static final long DRIVER_LOCATION_UPDATE_INITIAL_DELAY = 1;
   public static final long INCOMING_REQUEST_INTERVAL = 20;
   public static final long INCOMING_REQUEST_INITIAL_DELAY = 1;
+  public static final long TRIP_DETAIL_INTERVAL = 20;
+  public static final long TRIP_DETAIL_INITIAL_DELAY = 1;
   /**
    * String Constants
    */

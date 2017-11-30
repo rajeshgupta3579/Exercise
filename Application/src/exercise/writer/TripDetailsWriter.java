@@ -6,14 +6,14 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
-import org.apache.commons.lang.math.RandomUtils;
+import org.apache.commons.lang.StringUtils;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
@@ -43,7 +43,6 @@ public class TripDetailsWriter {
       System.out.println("DataSet Not Found");
       e.printStackTrace();
     }
-    final BufferedReader finalBr = br;
 
     final KinesisProducer producer = ProducerUtil.getKinesisProducer();
     final AtomicLong completed = new AtomicLong(0);
@@ -73,77 +72,88 @@ public class TripDetailsWriter {
         long done = completed.get();
         log.info(String.format("%d puts have completed after 20 seconds", done));
       }
-    }, 1, 20, TimeUnit.SECONDS);
+    }, Constants.TRIP_DETAIL_INITIAL_DELAY, Constants.TRIP_DETAIL_INTERVAL, TimeUnit.SECONDS);
 
     boolean condition = true;
     while (condition) {
       String line;
-      ByteBuffer data = null;
-      List<String> locationUpdates = new ArrayList<>();
-      int driverCount = Constants.MIN_DRIVER_COUNT
-          + RandomUtils.nextInt() % (Constants.MAX_DRIVER_COUNT - Constants.MIN_DRIVER_COUNT);
-      int offSet = RandomUtils.nextInt();
-      for (int i = 0; i < driverCount; i++) {
-        int driverId = (i + offSet) % Constants.MAX_DRIVER_COUNT;
-        try {
-          if ((line = finalBr.readLine()) != null) {
-            final String finalLine = line;
-            String[] fields = finalLine.split(",");
-            DateTimeFormatter format =
-                org.joda.time.format.DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss");
-            DateTime pickupTime = DateTime.parse(fields[0], format);
-            DateTime dropoffTime = DateTime.parse(fields[1], format);
-            double pickupLongitude = Double.parseDouble(fields[2]);
-            double pickupLatitude = Double.parseDouble(fields[3]);
-            double dropoffLongitude = Double.parseDouble(fields[4]);
-            double dropoffLatitude = Double.parseDouble(fields[5]);
-            // in Km
-            double tripDistance = Double.parseDouble(fields[6]);
-            // in Hours
-            double tripTime = (dropoffTime.getMillis() - pickupTime.getMillis()) / (60 * 60 * 1000);
-            // in Km/Hr
-            double tripSpeed = tripDistance / tripTime;
-            // double routeSlope =
-            // (dropoffLatitude - pickupLatitude) / (dropoffLongitude - pickupLongitude);
-            // double theta = Math.atan(routeSlope);
-            // double horizontalDistance = tripDistance * Math.cos(theta);
-            // double verticalDistance = tripDistance * Math.sin(theta);
-            Integer a = 0, b = 0;
-            String pickupGeohash = GeoHash.getGeoHashString(pickupLatitude, pickupLongitude);
-            String dropOffGeohash = GeoHash.getGeoHashString(pickupLatitude, pickupLongitude);
-            locationUpdates.add(pickupGeohash + Constants.DELIMITER + driverId);
-          } else {
-            condition = false;
-            break;
-          }
-        } catch (IOException e) {
-          // TODO Auto-generated catch block
-          e.printStackTrace();
-        }
-      }
       try {
-        data = ByteBuffer
-            .wrap(locationUpdates.stream().collect(Collectors.joining(",")).getBytes("UTF-8"));
-      } catch (UnsupportedEncodingException e) {
+        if ((line = br.readLine()) != null) {
+          String[] fields = line.split(",");
+          DateTimeFormatter format =
+              org.joda.time.format.DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss");
+          DateTime pickupTime = DateTime.parse(fields[0], format);
+          DateTime dropoffTime = DateTime.parse(fields[1], format);
+          double pickupLongitude = Double.parseDouble(fields[2]);
+          double pickupLatitude = Double.parseDouble(fields[3]);
+          double dropoffLongitude = Double.parseDouble(fields[4]);
+          double dropoffLatitude = Double.parseDouble(fields[5]);
+          // in Km
+          double tripDistance = Double.parseDouble(fields[6]);
+          // in Hours
+          double tripTime = (dropoffTime.getMillis() - pickupTime.getMillis()) / (60 * 60 * 1000);
+          // in Km/Hr
+          double tripSpeed = tripDistance / tripTime;
+          Set<String> routeGeohashes =
+              getRoute(pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude);
+          String tripDetails = String.valueOf(tripSpeed) + Constants.DELIMITER
+              + routeGeohashes.stream().collect(Collectors.joining(","));
+          ByteBuffer data = null;
+          try {
+            data = ByteBuffer.wrap(tripDetails.getBytes("UTF-8"));
+          } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+          }
+          ListenableFuture<UserRecordResult> f =
+              producer.addUserRecord(Constants.TRIP_DETAIL_STREAM_NAME,
+                  Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
+          Futures.addCallback(f, callback);
+        } else {
+          condition = false;
+        }
+      } catch (IOException e) {
         // TODO Auto-generated catch block
         e.printStackTrace();
       }
-      ListenableFuture<UserRecordResult> f =
-          producer.addUserRecord(Constants.DRIVER_LOCATION_STREAM_NAME,
-              Utils.randomExplicitHashKey(), Utils.randomExplicitHashKey(), data);
-      Futures.addCallback(f, callback);
       Thread.sleep(5000);
     }
     producer.flushSync();
     log.info("Waiting for remaining puts to finish...");
     log.info("All records complete.");
     producer.destroy();
-    try {
+    try
+
+    {
       br.close();
     } catch (IOException e) {
       e.printStackTrace();
     }
     log.info("Finished.");
     EXECUTOR.shutdown();
+  }
+
+  private static Set<String> getRoute(double y1, double x1, double y2, double x2) {
+    Set<String> geoHashes = new HashSet<>();
+    String pickupGeohash = GeoHash.getGeoHashString(y1, x1);
+    String dropoffGeohash = GeoHash.getGeoHashString(y2, x2);
+    geoHashes.add(pickupGeohash);
+    double lat = y1, lng = x1;
+    String currentGeohash = null;
+    while (!StringUtils.equals(dropoffGeohash, currentGeohash)) {
+      if (lat < y2 && y1 < y2) {
+        lat += Constants.LATITUDE_ERROR;
+      } else if (lat > y2 && y1 > y2) {
+        lat -= Constants.LATITUDE_ERROR;
+      }
+      if (lng < x2 && x1 < x2) {
+        lng += Constants.LONGITUDE_ERROR;
+      } else if (lng > x2 && x1 > x2) {
+        lng -= Constants.LONGITUDE_ERROR;
+      }
+      currentGeohash = GeoHash.getGeoHashString(lat, lng);
+      geoHashes.add(currentGeohash);
+    }
+    log.info("Success:  Route Calculated.");
+    return geoHashes;
   }
 }

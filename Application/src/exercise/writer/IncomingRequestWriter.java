@@ -38,7 +38,6 @@ public class IncomingRequestWriter {
       System.out.println("DataSet Not Found");
       e.printStackTrace();
     }
-    final BufferedReader finalBr = br;
 
     final KinesisProducer producer = ProducerUtil.getKinesisProducer();
     final AtomicLong completed = new AtomicLong(0);
@@ -75,9 +74,8 @@ public class IncomingRequestWriter {
     while (condition) {
       String line;
       try {
-        if ((line = finalBr.readLine()) != null) {
-          final String finalLine = line;
-          String[] fields = finalLine.split(",");
+        if ((line = br.readLine()) != null) {
+          String[] fields = line.split(",");
           double longitude = Double.parseDouble(fields[0]);
           double latitude = Double.parseDouble(fields[1]);
           String geo = GeoHash.getGeoHashString(latitude, longitude);
