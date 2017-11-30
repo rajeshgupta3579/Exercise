@@ -3,6 +3,8 @@ var sock = io();
 var layers = [];
 var intervalId;
 var api_url = 'https://8b8luijpq5.execute-api.eu-central-1.amazonaws.com/prod/getDataFromRDS';
+var lat_error = 0.0027;
+var long_error = 0.0055;
 (function init() {
   initMap();
   sock.emit('updateView',function(){});
@@ -43,14 +45,17 @@ function updateViewBatch() {
 }
 
 function drawMarker(lat, lng, value) {
-  layers.push(L.circle([lat,lng], 300, {
-     fill: false
-   }).bindTooltip("<label class = \"labelText\"><b>" + value + "x" + "</br></label>", {
+  var bounds = [[lat + lat_error, lng + long_error], [lat - lat_error, lng + long_error], [lat + lat_error, lng - long_error], [lat - lat_error, lng - long_error]];
+  layers.push(L.rectangle(bounds, {
+    weight: 2,
+    fill : false
+  }).bindTooltip("<label class = \"labelText\"><b>" + value + "x" + "</br></label>", {
         permanent: true, className: "labelContainer", direction : "top", offset : [0,20]
-      }).addTo(map));
+     }).addTo(map));
 }
 
 function initMap() {
+
   console.log('Initializing map');
   map = L.map('map').setView([40.7,-73.9], 13);
 
