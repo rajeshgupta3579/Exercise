@@ -32,9 +32,8 @@ function updateViewBatch() {
               map.removeLayer(layers[i]);
             }
             data.forEach(function(databaseEntryItem){
-              var latlon = Geohash.decode(databaseEntryItem.GeoHash);
-              console.log(parseFloat(databaseEntryItem.SurgePrice).toFixed(2));
-              drawMarker(latlon.lat,latlon.lon,parseFloat(databaseEntryItem.SurgePrice).toFixed(2));
+              var latlon = geohash.decode(databaseEntryItem.GeoHash);
+              drawMarker(latlon.latitude,latlon.longitude,parseFloat(databaseEntryItem.SurgePrice).toFixed(2));
             })
           }
         });

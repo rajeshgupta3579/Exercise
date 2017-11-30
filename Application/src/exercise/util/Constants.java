@@ -19,7 +19,7 @@ public class Constants {
   public static final double MAX_SURGE_MULTIPLIER = 5;
   public static final Integer TIME_INTERVAL = 10;
   public static final TimeUnit TIME_UNIT = TimeUnit.MINUTES;
-  public static final String DATA_SET_FILE_PATH = "../../Datasets/dataset.csv";
+  public static final String DATA_SET_FILE_PATH = "../Datasets/dataset.csv";
 
   /**
    * Redis Connection config

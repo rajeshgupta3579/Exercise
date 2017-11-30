@@ -1,244 +1,507 @@
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-/* Geohash encoding/decoding and associated functions   (c) Chris Veness 2014-2016 / MIT Licence  */
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-
-'use strict';
-
-
 /**
- * Geohash encode, decode, bounds, neighbours.
+ * Copyright (c) 2011, Sun Ning.
  *
- * @namespace
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use, copy,
+ * modify, merge, publish, distribute, sublicense, and/or sell copies
+ * of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+ * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
  */
-var Geohash = {};
 
-/* (Geohash-specific) Base32 map */
-Geohash.base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+var BASE32_CODES = "0123456789bcdefghjkmnpqrstuvwxyz";
+var BASE32_CODES_DICT = {};
+for (var i = 0; i < BASE32_CODES.length; i++) {
+  BASE32_CODES_DICT[BASE32_CODES.charAt(i)] = i;
+}
 
+var ENCODE_AUTO = 'auto';
 /**
- * Encodes latitude/longitude to geohash, either to specified precision or to automatically
- * evaluated precision.
+ * Significant Figure Hash Length
  *
- * @param   {number} lat - Latitude in degrees.
- * @param   {number} lon - Longitude in degrees.
- * @param   {number} [precision] - Number of characters in resulting geohash.
- * @returns {string} Geohash of supplied latitude/longitude.
- * @throws  Invalid geohash.
- *
- * @example
- *     var geohash = Geohash.encode(52.205, 0.119, 7); // geohash: 'u120fxw'
+ * This is a quick and dirty lookup to figure out how long our hash
+ * should be in order to guarantee a certain amount of trailing
+ * significant figures. This was calculated by determining the error:
+ * 45/2^(n-1) where n is the number of bits for a latitude or
+ * longitude. Key is # of desired sig figs, value is minimum length of
+ * the geohash.
+ * @type Array
  */
-Geohash.encode = function(lat, lon, precision) {
-    // infer precision?
-    if (typeof precision == 'undefined') {
-        // refine geohash until it matches precision of supplied lat/lon
-        for (var p=1; p<=12; p++) {
-            var hash = Geohash.encode(lat, lon, p);
-            var posn = Geohash.decode(hash);
-            if (posn.lat==lat && posn.lon==lon) return hash;
-        }
-        precision = 12; // set to maximum
+//     Desired sig figs:  0  1  2  3  4   5   6   7   8   9  10
+var SIGFIG_HASH_LENGTH = [0, 5, 7, 8, 11, 12, 13, 15, 16, 17, 18];
+/**
+ * Encode
+ *
+ * Create a Geohash out of a latitude and longitude that is
+ * `numberOfChars` long.
+ *
+ * @param {Number|String} latitude
+ * @param {Number|String} longitude
+ * @param {Number} numberOfChars
+ * @returns {String}
+ */
+var encode = function (latitude, longitude, numberOfChars) {
+  if (numberOfChars === ENCODE_AUTO) {
+    if (typeof(latitude) === 'number' || typeof(longitude) === 'number') {
+      throw new Error('string notation required for auto precision.');
+    }
+    var decSigFigsLat = latitude.split('.')[1].length;
+    var decSigFigsLong = longitude.split('.')[1].length;
+    var numberOfSigFigs = Math.max(decSigFigsLat, decSigFigsLong);
+    numberOfChars = SIGFIG_HASH_LENGTH[numberOfSigFigs];
+  } else if (numberOfChars === undefined) {
+    numberOfChars = 9;
+  }
+
+  var chars = [],
+  bits = 0,
+  bitsTotal = 0,
+  hash_value = 0,
+  maxLat = 90,
+  minLat = -90,
+  maxLon = 180,
+  minLon = -180,
+  mid;
+  while (chars.length < numberOfChars) {
+    if (bitsTotal % 2 === 0) {
+      mid = (maxLon + minLon) / 2;
+      if (longitude > mid) {
+        hash_value = (hash_value << 1) + 1;
+        minLon = mid;
+      } else {
+        hash_value = (hash_value << 1) + 0;
+        maxLon = mid;
+      }
+    } else {
+      mid = (maxLat + minLat) / 2;
+      if (latitude > mid) {
+        hash_value = (hash_value << 1) + 1;
+        minLat = mid;
+      } else {
+        hash_value = (hash_value << 1) + 0;
+        maxLat = mid;
+      }
     }
 
-    lat = Number(lat);
-    lon = Number(lon);
-    precision = Number(precision);
+    bits++;
+    bitsTotal++;
+    if (bits === 5) {
+      var code = BASE32_CODES[hash_value];
+      chars.push(code);
+      bits = 0;
+      hash_value = 0;
+    }
+  }
+  return chars.join('');
+};
 
-    if (isNaN(lat) || isNaN(lon) || isNaN(precision)) throw new Error('Invalid geohash');
+/**
+ * Encode Integer
+ *
+ * Create a Geohash out of a latitude and longitude that is of 'bitDepth'.
+ *
+ * @param {Number} latitude
+ * @param {Number} longitude
+ * @param {Number} bitDepth
+ * @returns {Number}
+ */
+var encode_int = function (latitude, longitude, bitDepth) {
 
-    var idx = 0; // index into base32 map
-    var bit = 0; // each char holds 5 bits
-    var evenBit = true;
-    var geohash = '';
+  bitDepth = bitDepth || 52;
 
-    var latMin =  -90, latMax =  90;
-    var lonMin = -180, lonMax = 180;
+  var bitsTotal = 0,
+  maxLat = 90,
+  minLat = -90,
+  maxLon = 180,
+  minLon = -180,
+  mid,
+  combinedBits = 0;
 
-    while (geohash.length < precision) {
-        if (evenBit) {
-            // bisect E-W longitude
-            var lonMid = (lonMin + lonMax) / 2;
-            if (lon >= lonMid) {
-                idx = idx*2 + 1;
-                lonMin = lonMid;
-            } else {
-                idx = idx*2;
-                lonMax = lonMid;
-            }
+  while (bitsTotal < bitDepth) {
+    combinedBits *= 2;
+    if (bitsTotal % 2 === 0) {
+      mid = (maxLon + minLon) / 2;
+      if (longitude > mid) {
+        combinedBits += 1;
+        minLon = mid;
+      } else {
+        maxLon = mid;
+      }
+    } else {
+      mid = (maxLat + minLat) / 2;
+      if (latitude > mid) {
+        combinedBits += 1;
+        minLat = mid;
+      } else {
+        maxLat = mid;
+      }
+    }
+    bitsTotal++;
+  }
+  return combinedBits;
+};
+
+/**
+ * Decode Bounding Box
+ *
+ * Decode hashString into a bound box matches it. Data returned in a four-element array: [minlat, minlon, maxlat, maxlon]
+ * @param {String} hash_string
+ * @returns {Array}
+ */
+var decode_bbox = function (hash_string) {
+  var isLon = true,
+  maxLat = 90,
+  minLat = -90,
+  maxLon = 180,
+  minLon = -180,
+  mid;
+
+  var hashValue = 0;
+  for (var i = 0, l = hash_string.length; i < l; i++) {
+    var code = hash_string[i].toLowerCase();
+    hashValue = BASE32_CODES_DICT[code];
+
+    for (var bits = 4; bits >= 0; bits--) {
+      var bit = (hashValue >> bits) & 1;
+      if (isLon) {
+        mid = (maxLon + minLon) / 2;
+        if (bit === 1) {
+          minLon = mid;
         } else {
-            // bisect N-S latitude
-            var latMid = (latMin + latMax) / 2;
-            if (lat >= latMid) {
-                idx = idx*2 + 1;
-                latMin = latMid;
-            } else {
-                idx = idx*2;
-                latMax = latMid;
-            }
+          maxLon = mid;
         }
-        evenBit = !evenBit;
+      } else {
+        mid = (maxLat + minLat) / 2;
+        if (bit === 1) {
+          minLat = mid;
+        } else {
+          maxLat = mid;
+        }
+      }
+      isLon = !isLon;
+    }
+  }
+  return [minLat, minLon, maxLat, maxLon];
+};
 
-        if (++bit == 5) {
-            // 5 bits gives us a character: append it and start over
-            geohash += Geohash.base32.charAt(idx);
-            bit = 0;
-            idx = 0;
+/**
+ * Decode Bounding Box Integer
+ *
+ * Decode hash number into a bound box matches it. Data returned in a four-element array: [minlat, minlon, maxlat, maxlon]
+ * @param {Number} hashInt
+ * @param {Number} bitDepth
+ * @returns {Array}
+ */
+var decode_bbox_int = function (hashInt, bitDepth) {
+
+  bitDepth = bitDepth || 52;
+
+  var maxLat = 90,
+  minLat = -90,
+  maxLon = 180,
+  minLon = -180;
+
+  var latBit = 0, lonBit = 0;
+  var step = bitDepth / 2;
+
+  for (var i = 0; i < step; i++) {
+
+    lonBit = get_bit(hashInt, ((step - i) * 2) - 1);
+    latBit = get_bit(hashInt, ((step - i) * 2) - 2);
+
+    if (latBit === 0) {
+      maxLat = (maxLat + minLat) / 2;
+    }
+    else {
+      minLat = (maxLat + minLat) / 2;
+    }
+
+    if (lonBit === 0) {
+      maxLon = (maxLon + minLon) / 2;
+    }
+    else {
+      minLon = (maxLon + minLon) / 2;
+    }
+  }
+  return [minLat, minLon, maxLat, maxLon];
+};
+
+function get_bit(bits, position) {
+  return (bits / Math.pow(2, position)) & 0x01;
+}
+
+/**
+ * Decode
+ *
+ * Decode a hash string into pair of latitude and longitude. A javascript object is returned with keys `latitude`,
+ * `longitude` and `error`.
+ * @param {String} hashString
+ * @returns {Object}
+ */
+var decode = function (hashString) {
+  var bbox = decode_bbox(hashString);
+  var lat = (bbox[0] + bbox[2]) / 2;
+  var lon = (bbox[1] + bbox[3]) / 2;
+  var latErr = bbox[2] - lat;
+  var lonErr = bbox[3] - lon;
+  return {latitude: lat, longitude: lon,
+          error: {latitude: latErr, longitude: lonErr}};
+};
+
+/**
+ * Decode Integer
+ *
+ * Decode a hash number into pair of latitude and longitude. A javascript object is returned with keys `latitude`,
+ * `longitude` and `error`.
+ * @param {Number} hash_int
+ * @param {Number} bitDepth
+ * @returns {Object}
+ */
+var decode_int = function (hash_int, bitDepth) {
+  var bbox = decode_bbox_int(hash_int, bitDepth);
+  var lat = (bbox[0] + bbox[2]) / 2;
+  var lon = (bbox[1] + bbox[3]) / 2;
+  var latErr = bbox[2] - lat;
+  var lonErr = bbox[3] - lon;
+  return {latitude: lat, longitude: lon,
+          error: {latitude: latErr, longitude: lonErr}};
+};
+
+/**
+ * Neighbor
+ *
+ * Find neighbor of a geohash string in certain direction. Direction is a two-element array, i.e. [1,0] means north, [-1,-1] means southwest.
+ * direction [lat, lon], i.e.
+ * [1,0] - north
+ * [1,1] - northeast
+ * ...
+ * @param {String} hashString
+ * @param {Array} Direction as a 2D normalized vector.
+ * @returns {String}
+ */
+var neighbor = function (hashString, direction) {
+  var lonLat = decode(hashString);
+  var neighborLat = lonLat.latitude
+    + direction[0] * lonLat.error.latitude * 2;
+  var neighborLon = lonLat.longitude
+    + direction[1] * lonLat.error.longitude * 2;
+  return encode(neighborLat, neighborLon, hashString.length);
+};
+
+/**
+ * Neighbor Integer
+ *
+ * Find neighbor of a geohash integer in certain direction. Direction is a two-element array, i.e. [1,0] means north, [-1,-1] means southwest.
+ * direction [lat, lon], i.e.
+ * [1,0] - north
+ * [1,1] - northeast
+ * ...
+ * @param {String} hash_string
+ * @returns {Array}
+*/
+var neighbor_int = function(hash_int, direction, bitDepth) {
+    bitDepth = bitDepth || 52;
+    var lonlat = decode_int(hash_int, bitDepth);
+    var neighbor_lat = lonlat.latitude + direction[0] * lonlat.error.latitude * 2;
+    var neighbor_lon = lonlat.longitude + direction[1] * lonlat.error.longitude * 2;
+    return encode_int(neighbor_lat, neighbor_lon, bitDepth);
+};
+
+/**
+ * Neighbors
+ *
+ * Returns all neighbors' hashstrings clockwise from north around to northwest
+ * 7 0 1
+ * 6 x 2
+ * 5 4 3
+ * @param {String} hash_string
+ * @returns {encoded neighborHashList|Array}
+ */
+var neighbors = function(hash_string){
+
+    var hashstringLength = hash_string.length;
+
+    var lonlat = decode(hash_string);
+    var lat = lonlat.latitude;
+    var lon = lonlat.longitude;
+    var latErr = lonlat.error.latitude * 2;
+    var lonErr = lonlat.error.longitude * 2;
+
+    var neighbor_lat,
+        neighbor_lon;
+
+    var neighborHashList = [
+                            encodeNeighbor(1,0),
+                            encodeNeighbor(1,1),
+                            encodeNeighbor(0,1),
+                            encodeNeighbor(-1,1),
+                            encodeNeighbor(-1,0),
+                            encodeNeighbor(-1,-1),
+                            encodeNeighbor(0,-1),
+                            encodeNeighbor(1,-1)
+                            ];
+
+    function encodeNeighbor(neighborLatDir, neighborLonDir){
+        neighbor_lat = lat + neighborLatDir * latErr;
+        neighbor_lon = lon + neighborLonDir * lonErr;
+        return encode(neighbor_lat, neighbor_lon, hashstringLength);
+    }
+
+    return neighborHashList;
+};
+
+/**
+ * Neighbors Integer
+ *
+ * Returns all neighbors' hash integers clockwise from north around to northwest
+ * 7 0 1
+ * 6 x 2
+ * 5 4 3
+ * @param {Number} hash_int
+ * @param {Number} bitDepth
+ * @returns {encode_int'd neighborHashIntList|Array}
+ */
+var neighbors_int = function(hash_int, bitDepth){
+
+    bitDepth = bitDepth || 52;
+
+    var lonlat = decode_int(hash_int, bitDepth);
+    var lat = lonlat.latitude;
+    var lon = lonlat.longitude;
+    var latErr = lonlat.error.latitude * 2;
+    var lonErr = lonlat.error.longitude * 2;
+
+    var neighbor_lat,
+        neighbor_lon;
+
+    var neighborHashIntList = [
+                            encodeNeighbor_int(1,0),
+                            encodeNeighbor_int(1,1),
+                            encodeNeighbor_int(0,1),
+                            encodeNeighbor_int(-1,1),
+                            encodeNeighbor_int(-1,0),
+                            encodeNeighbor_int(-1,-1),
+                            encodeNeighbor_int(0,-1),
+                            encodeNeighbor_int(1,-1)
+                            ];
+
+    function encodeNeighbor_int(neighborLatDir, neighborLonDir){
+        neighbor_lat = lat + neighborLatDir * latErr;
+        neighbor_lon = lon + neighborLonDir * lonErr;
+        return encode_int(neighbor_lat, neighbor_lon, bitDepth);
+    }
+
+    return neighborHashIntList;
+};
+
+
+/**
+ * Bounding Boxes
+ *
+ * Return all the hashString between minLat, minLon, maxLat, maxLon in numberOfChars
+ * @param {Number} minLat
+ * @param {Number} minLon
+ * @param {Number} maxLat
+ * @param {Number} maxLon
+ * @param {Number} numberOfChars
+ * @returns {bboxes.hashList|Array}
+ */
+var bboxes = function (minLat, minLon, maxLat, maxLon, numberOfChars) {
+  numberOfChars = numberOfChars || 9;
+
+  var hashSouthWest = encode(minLat, minLon, numberOfChars);
+  var hashNorthEast = encode(maxLat, maxLon, numberOfChars);
+
+  var latLon = decode(hashSouthWest);
+
+  var perLat = latLon.error.latitude * 2;
+  var perLon = latLon.error.longitude * 2;
+
+  var boxSouthWest = decode_bbox(hashSouthWest);
+  var boxNorthEast = decode_bbox(hashNorthEast);
+
+  var latStep = Math.round((boxNorthEast[0] - boxSouthWest[0]) / perLat);
+  var lonStep = Math.round((boxNorthEast[1] - boxSouthWest[1]) / perLon);
+
+  var hashList = [];
+
+  for (var lat = 0; lat <= latStep; lat++) {
+    for (var lon = 0; lon <= lonStep; lon++) {
+      hashList.push(neighbor(hashSouthWest, [lat, lon]));
+    }
+  }
+
+  return hashList;
+};
+
+/**
+ * Bounding Boxes Integer
+ *
+ * Return all the hash integers between minLat, minLon, maxLat, maxLon in bitDepth
+ * @param {Number} minLat
+ * @param {Number} minLon
+ * @param {Number} maxLat
+ * @param {Number} maxLon
+ * @param {Number} bitDepth
+ * @returns {bboxes_int.hashList|Array}
+ */
+var bboxes_int = function(minLat, minLon, maxLat, maxLon, bitDepth){
+    bitDepth = bitDepth || 52;
+
+    var hashSouthWest = encode_int(minLat, minLon, bitDepth);
+    var hashNorthEast = encode_int(maxLat, maxLon, bitDepth);
+
+    var latlon = decode_int(hashSouthWest, bitDepth);
+
+    var perLat = latlon.error.latitude * 2;
+    var perLon = latlon.error.longitude * 2;
+
+    var boxSouthWest = decode_bbox_int(hashSouthWest, bitDepth);
+    var boxNorthEast = decode_bbox_int(hashNorthEast, bitDepth);
+
+    var latStep = Math.round((boxNorthEast[0] - boxSouthWest[0])/perLat);
+    var lonStep = Math.round((boxNorthEast[1] - boxSouthWest[1])/perLon);
+
+    var hashList = [];
+
+    for(var lat = 0; lat <= latStep; lat++){
+        for(var lon = 0; lon <= lonStep; lon++){
+            hashList.push(neighbor_int(hashSouthWest,[lat, lon], bitDepth));
         }
     }
 
-    return geohash;
+    return hashList;
 };
 
-
-/**
- * Decode geohash to latitude/longitude (location is approximate centre of geohash cell,
- *     to reasonable precision).
- *
- * @param   {string} geohash - Geohash string to be converted to latitude/longitude.
- * @returns {{lat:number, lon:number}} (Center of) geohashed location.
- * @throws  Invalid geohash.
- *
- * @example
- *     var latlon = Geohash.decode('u120fxw'); // latlon: { lat: 52.205, lon: 0.1188 }
- */
-Geohash.decode = function(geohash) {
-
-    var bounds = Geohash.bounds(geohash); // <-- the hard work
-    // now just determine the centre of the cell...
-
-    var latMin = bounds.sw.lat, lonMin = bounds.sw.lon;
-    var latMax = bounds.ne.lat, lonMax = bounds.ne.lon;
-
-    // cell centre
-    var lat = (latMin + latMax)/2;
-    var lon = (lonMin + lonMax)/2;
-
-    // round to close to centre without excessive precision: ⌊2-log10(Δ°)⌋ decimal places
-    lat = lat.toFixed(Math.floor(2-Math.log(latMax-latMin)/Math.LN10));
-    lon = lon.toFixed(Math.floor(2-Math.log(lonMax-lonMin)/Math.LN10));
-
-    return { lat: Number(lat), lon: Number(lon) };
+var geohash = {
+  'ENCODE_AUTO': ENCODE_AUTO,
+  'encode': encode,
+  'encode_uint64': encode_int, // keeping for backwards compatibility, will deprecate
+  'encode_int': encode_int,
+  'decode': decode,
+  'decode_int': decode_int,
+  'decode_uint64': decode_int, // keeping for backwards compatibility, will deprecate
+  'decode_bbox': decode_bbox,
+  'decode_bbox_uint64': decode_bbox_int, // keeping for backwards compatibility, will deprecate
+  'decode_bbox_int': decode_bbox_int,
+  'neighbor': neighbor,
+  'neighbor_int': neighbor_int,
+  'neighbors': neighbors,
+  'neighbors_int': neighbors_int,
+  'bboxes': bboxes,
+  'bboxes_int': bboxes_int
 };
-
-
-/**
- * Returns SW/NE latitude/longitude bounds of specified geohash.
- *
- * @param   {string} geohash - Cell that bounds are required of.
- * @returns {{sw: {lat: number, lon: number}, ne: {lat: number, lon: number}}}
- * @throws  Invalid geohash.
- */
-Geohash.bounds = function(geohash) {
-    if (geohash.length === 0) throw new Error('Invalid geohash');
-
-    geohash = geohash.toLowerCase();
-
-    var evenBit = true;
-    var latMin =  -90, latMax =  90;
-    var lonMin = -180, lonMax = 180;
-
-    for (var i=0; i<geohash.length; i++) {
-        var chr = geohash.charAt(i);
-        var idx = Geohash.base32.indexOf(chr);
-        if (idx == -1) throw new Error('Invalid geohash');
-
-        for (var n=4; n>=0; n--) {
-            var bitN = idx >> n & 1;
-            if (evenBit) {
-                // longitude
-                var lonMid = (lonMin+lonMax) / 2;
-                if (bitN == 1) {
-                    lonMin = lonMid;
-                } else {
-                    lonMax = lonMid;
-                }
-            } else {
-                // latitude
-                var latMid = (latMin+latMax) / 2;
-                if (bitN == 1) {
-                    latMin = latMid;
-                } else {
-                    latMax = latMid;
-                }
-            }
-            evenBit = !evenBit;
-        }
-    }
-
-    var bounds = {
-        sw: { lat: latMin, lon: lonMin },
-        ne: { lat: latMax, lon: lonMax },
-    };
-
-    return bounds;
-};
-
-
-/**
- * Determines adjacent cell in given direction.
- *
- * @param   geohash - Cell to which adjacent cell is required.
- * @param   direction - Direction from geohash (N/S/E/W).
- * @returns {string} Geocode of adjacent cell.
- * @throws  Invalid geohash.
- */
-Geohash.adjacent = function(geohash, direction) {
-    // based on github.com/davetroy/geohash-js
-
-    geohash = geohash.toLowerCase();
-    direction = direction.toLowerCase();
-
-    if (geohash.length === 0) throw new Error('Invalid geohash');
-    if ('nsew'.indexOf(direction) == -1) throw new Error('Invalid direction');
-
-    var neighbour = {
-        n: [ 'p0r21436x8zb9dcf5h7kjnmqesgutwvy', 'bc01fg45238967deuvhjyznpkmstqrwx' ],
-        s: [ '14365h7k9dcfesgujnmqp0r2twvyx8zb', '238967debc01fg45kmstqrwxuvhjyznp' ],
-        e: [ 'bc01fg45238967deuvhjyznpkmstqrwx', 'p0r21436x8zb9dcf5h7kjnmqesgutwvy' ],
-        w: [ '238967debc01fg45kmstqrwxuvhjyznp', '14365h7k9dcfesgujnmqp0r2twvyx8zb' ],
-    };
-    var border = {
-        n: [ 'prxz',     'bcfguvyz' ],
-        s: [ '028b',     '0145hjnp' ],
-        e: [ 'bcfguvyz', 'prxz'     ],
-        w: [ '0145hjnp', '028b'     ],
-    };
-
-    var lastCh = geohash.slice(-1);    // last character of hash
-    var parent = geohash.slice(0, -1); // hash without last character
-
-    var type = geohash.length % 2;
-
-    // check for edge-cases which don't share common prefix
-    if (border[direction][type].indexOf(lastCh) != -1 && parent !== '') {
-        parent = Geohash.adjacent(parent, direction);
-    }
-
-    // append letter for direction to parent
-    return parent + Geohash.base32.charAt(neighbour[direction][type].indexOf(lastCh));
-};
-
-
-/**
- * Returns all 8 adjacent cells to specified geohash.
- *
- * @param   {string} geohash - Geohash neighbours are required of.
- * @returns {{n,ne,e,se,s,sw,w,nw: string}}
- * @throws  Invalid geohash.
- */
-Geohash.neighbours = function(geohash) {
-    return {
-        'n':  Geohash.adjacent(geohash, 'n'),
-        'ne': Geohash.adjacent(Geohash.adjacent(geohash, 'n'), 'e'),
-        'e':  Geohash.adjacent(geohash, 'e'),
-        'se': Geohash.adjacent(Geohash.adjacent(geohash, 's'), 'e'),
-        's':  Geohash.adjacent(geohash, 's'),
-        'sw': Geohash.adjacent(Geohash.adjacent(geohash, 's'), 'w'),
-        'w':  Geohash.adjacent(geohash, 'w'),
-        'nw': Geohash.adjacent(Geohash.adjacent(geohash, 'n'), 'w'),
-    };
-};
-
-
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-if (typeof module != 'undefined' && module.exports) module.exports = Geohash; // CommonJS, node.js
