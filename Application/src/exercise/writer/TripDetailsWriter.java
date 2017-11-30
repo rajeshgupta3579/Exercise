@@ -14,6 +14,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import org.apache.commons.lang.math.RandomUtils;
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.amazonaws.services.kinesis.producer.Attempt;
@@ -29,14 +31,14 @@ import exercise.util.GeoHash;
 import exercise.util.ProducerUtil;
 import exercise.util.Utils;
 
-public class TripDataWriter {
-  private static final Logger log = LoggerFactory.getLogger(TripDataWriter.class);
+public class TripDetailsWriter {
+  private static final Logger log = LoggerFactory.getLogger(TripDetailsWriter.class);
   private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1);
 
   public static void main(String[] args) throws Exception {
     BufferedReader br = null;
     try {
-      br = new BufferedReader(new FileReader(Constants.DATA_SET_FILE_PATH));
+      br = new BufferedReader(new FileReader(Constants.TRIP_DETAILS_DATA_SET_FILE_PATH));
     } catch (FileNotFoundException e) {
       System.out.println("DataSet Not Found");
       e.printStackTrace();
@@ -72,7 +74,7 @@ public class TripDataWriter {
         log.info(String.format("%d puts have completed after 20 seconds", done));
       }
     }, 1, 20, TimeUnit.SECONDS);
-    
+
     boolean condition = true;
     while (condition) {
       String line;
@@ -87,12 +89,29 @@ public class TripDataWriter {
           if ((line = finalBr.readLine()) != null) {
             final String finalLine = line;
             String[] fields = finalLine.split(",");
-            double longitude = Double.parseDouble(fields[7]);
-            double latitude = Double.parseDouble(fields[8]);
-            GeoHash g = new GeoHash(latitude, longitude);
-            g.sethashLength(6);
-            String geo = g.getGeoHashBase32();
-            locationUpdates.add(geo + Constants.DELIMITER + driverId);
+            DateTimeFormatter format =
+                org.joda.time.format.DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss");
+            DateTime pickupTime = DateTime.parse(fields[0], format);
+            DateTime dropoffTime = DateTime.parse(fields[1], format);
+            double pickupLongitude = Double.parseDouble(fields[2]);
+            double pickupLatitude = Double.parseDouble(fields[3]);
+            double dropoffLongitude = Double.parseDouble(fields[4]);
+            double dropoffLatitude = Double.parseDouble(fields[5]);
+            // in Km
+            double tripDistance = Double.parseDouble(fields[6]);
+            // in Hours
+            double tripTime = (dropoffTime.getMillis() - pickupTime.getMillis()) / (60 * 60 * 1000);
+            // in Km/Hr
+            double tripSpeed = tripDistance / tripTime;
+            // double routeSlope =
+            // (dropoffLatitude - pickupLatitude) / (dropoffLongitude - pickupLongitude);
+            // double theta = Math.atan(routeSlope);
+            // double horizontalDistance = tripDistance * Math.cos(theta);
+            // double verticalDistance = tripDistance * Math.sin(theta);
+            Integer a = 0, b = 0;
+            String pickupGeohash = GeoHash.getGeoHashString(pickupLatitude, pickupLongitude);
+            String dropOffGeohash = GeoHash.getGeoHashString(pickupLatitude, pickupLongitude);
+            locationUpdates.add(pickupGeohash + Constants.DELIMITER + driverId);
           } else {
             condition = false;
             break;
@@ -103,8 +122,8 @@ public class TripDataWriter {
         }
       }
       try {
-        data =
-            ByteBuffer.wrap(locationUpdates.stream().collect(Collectors.joining(",")).getBytes("UTF-8"));
+        data = ByteBuffer
+            .wrap(locationUpdates.stream().collect(Collectors.joining(",")).getBytes("UTF-8"));
       } catch (UnsupportedEncodingException e) {
         // TODO Auto-generated catch block
         e.printStackTrace();

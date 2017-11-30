@@ -33,7 +33,7 @@ public class IncomingRequestWriter {
   public static void main(String[] args) throws Exception {
     BufferedReader br = null;
     try {
-      br = new BufferedReader(new FileReader(Constants.DATA_SET_FILE_PATH));
+      br = new BufferedReader(new FileReader(Constants.INCOMING_REQUESTS_DATA_SET_FILE_PATH));
     } catch (FileNotFoundException e) {
       System.out.println("DataSet Not Found");
       e.printStackTrace();
@@ -68,8 +68,9 @@ public class IncomingRequestWriter {
         long done = completed.get();
         log.info(String.format("%d puts have completed after 20 seconds", done));
       }
-    }, 1, 20, TimeUnit.SECONDS);
-    
+    }, Constants.INCOMING_REQUEST_INITIAL_DELAY, Constants.INCOMING_REQUEST_INTERVAL,
+        TimeUnit.SECONDS);
+
     boolean condition = true;
     while (condition) {
       String line;
@@ -77,11 +78,9 @@ public class IncomingRequestWriter {
         if ((line = finalBr.readLine()) != null) {
           final String finalLine = line;
           String[] fields = finalLine.split(",");
-          double longitude = Double.parseDouble(fields[5]);
-          double latitude = Double.parseDouble(fields[6]);
-          GeoHash g = new GeoHash(latitude, longitude);
-          g.sethashLength(6);
-          String geo = g.getGeoHashBase32();
+          double longitude = Double.parseDouble(fields[0]);
+          double latitude = Double.parseDouble(fields[1]);
+          String geo = GeoHash.getGeoHashString(latitude, longitude);
           // System.out.println(geo);
           ByteBuffer data = null;
           try {

@@ -36,7 +36,7 @@ public class DriverLocationWriter {
   public static void main(String[] args) throws Exception {
     BufferedReader br = null;
     try {
-      br = new BufferedReader(new FileReader(Constants.DATA_SET_FILE_PATH));
+      br = new BufferedReader(new FileReader(Constants.DRIVER_LOCATIONS_DATA_SET_FILE_PATH));
     } catch (FileNotFoundException e) {
       System.out.println("DataSet Not Found");
       e.printStackTrace();
@@ -71,8 +71,8 @@ public class DriverLocationWriter {
         long done = completed.get();
         log.info(String.format("%d puts have completed after 20 seconds", done));
       }
-    }, 1, 20, TimeUnit.SECONDS);
-    
+    }, 1, Constants.DRIVER_LOCATION_UPDATE_INTERVAL, TimeUnit.SECONDS);
+
     boolean condition = true;
     while (condition) {
       String line;
@@ -87,11 +87,9 @@ public class DriverLocationWriter {
           if ((line = finalBr.readLine()) != null) {
             final String finalLine = line;
             String[] fields = finalLine.split(",");
-            double longitude = Double.parseDouble(fields[7]);
-            double latitude = Double.parseDouble(fields[8]);
-            GeoHash g = new GeoHash(latitude, longitude);
-            g.sethashLength(6);
-            String geo = g.getGeoHashBase32();
+            double longitude = Double.parseDouble(fields[0]);
+            double latitude = Double.parseDouble(fields[1]);
+            String geo = GeoHash.getGeoHashString(latitude, longitude);
             locationUpdates.add(geo + Constants.DELIMITER + driverId);
           } else {
             condition = false;
@@ -103,8 +101,8 @@ public class DriverLocationWriter {
         }
       }
       try {
-        data =
-            ByteBuffer.wrap(locationUpdates.stream().collect(Collectors.joining(",")).getBytes("UTF-8"));
+        data = ByteBuffer
+            .wrap(locationUpdates.stream().collect(Collectors.joining(",")).getBytes("UTF-8"));
       } catch (UnsupportedEncodingException e) {
         // TODO Auto-generated catch block
         e.printStackTrace();
