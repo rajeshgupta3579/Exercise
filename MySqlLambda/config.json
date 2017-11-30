@@ -1,0 +1,7 @@
+{
+    "dbhost" : "grab-exercise-db-instance.coooavv2qtha.eu-central-1.rds.amazonaws.com",
+    "dbport" : 3306,
+    "dbname" : "GrabExercise",
+    "dbuser" :"grabDB",
+    "dbpassword" :"mainkyodassa"
+}

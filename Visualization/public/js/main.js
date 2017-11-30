@@ -1,9 +1,12 @@
 var map;
 var sock = io();
 var layers = [];
+var intervalId;
+var api_url = 'https://8b8luijpq5.execute-api.eu-central-1.amazonaws.com/prod/getDataFromRDS';
 (function init() {
   initMap();
   sock.emit('updateView',function(){});
+  sock.emit('updateViewScheduled',function(){});
   sock.on('coords', function(c) {
     drawMarker(c.lat,c.lng,c.value);
   });
@@ -14,12 +17,28 @@ var layers = [];
   });
 })();
 
-function updateMapView() {
-    if(document.getElementById('operation-type').value=='batch'){
-      sock.emit('updateBatchView',function(){});
+function updateViewBatch() {
+    if($('#batch').prop("checked")){
+        sock.emit('clearIntervalId',function(){});
+        $.ajax({
+          type: 'GET',
+          url: api_url,
+          data: { "timestamp" : $('#timeField').val() },
+          contentType: "application/json",
+          success: function(data){
+            for(var i=0;i<layers.length;i++){
+              map.removeLayer(layers[i]);
+            }
+            data.forEach(function(databaseEntryItem){
+              var latlon = Geohash.decode(databaseEntryItem.GeoHash);
+              console.log(parseFloat(databaseEntryItem.SurgePrice).toFixed(2));
+              drawMarker(latlon.lat,latlon.lon,parseFloat(databaseEntryItem.SurgePrice).toFixed(2));
+            })
+          }
+        });
     }
     else{
-      sock.emit('updateView',function(){});
+        sock.emit('checkAndUpdateView',function(){});
     }
 }
 

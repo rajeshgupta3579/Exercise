@@ -3,67 +3,67 @@ const http = require('http');
 const client = require('redis').createClient();
 const async = require('async');
 const geohash = require('ngeohash');
-const mysql = require('mysql');
 
 client.on('connect',function() {
     console.log('connected');
 });
 
-var connection = mysql.createConnection({
-  userName: 'grabDB',
-  password: 'mainkyodassa',
-  host: 'grab-exercise-db-instance.coooavv2qtha.eu-central-1.rds.amazonaws.com',
-  port:3306,
-  database: 'GrabExercise'
-  });
-connection.connect(function(err) {
-  if (err) {
-    console.error('Database connection failed: ' + err.stack);
-    return;
+var timer = 10000;
+var intervalId = false;
+updateViewScheduled = function() {
+  console.log("updateViewScheduled");
+  if(intervalId){
+    clearIntervalId();
   }
+  intervalId = setInterval(updateView,timer);
+}
 
-  console.log('Connected to database.');
-});
+checkAndUpdateView = function() {
+  console.log("checkAndUpdateView");
+  if(intervalId==false){
+    updateView();
+    updateViewScheduled();
+  }
+}
 
-var timer = 60000;
+clearIntervalId = function() {
+  console.log("clearIntervalId");
+  clearInterval(intervalId);
+  intervalId = false;
+}
 
-setInterval(() => {
-  updateView();
-}, timer);
 
 updateView = function(){
   io.emit('clearView');
+  console.log("updateView");
   var SURGE_PRICING_KEY_PREFIX = 'surge_';
-  updateView = function(){
-    io.emit('clearView');
-    client.keys(SURGE_PRICING_KEY_PREFIX + '*', function (err, keys) {
-      if (err) return console.log(err);
-      if(keys){
-            async.map(keys, function(key, cb) {
-                client.get(key, function (error, value) {
-                    if (error) return cb(error);
-                    var latlon = geohash.decode(key.substr(SURGE_PRICING_KEY_PREFIX.length));
-                    io.emit('coords', {
-                      lat: latlon.latitude,
-                      lng: latlon.longitude,
-                      value: value
-                    });
-                });
-            });
-      }
-    });
-  }
+  client.keys(SURGE_PRICING_KEY_PREFIX + '*', function (err, keys) {
+    if (err) return console.log(err);
+    if(keys){
+          async.map(keys, function(key, cb) {
+              client.get(key, function (error, value) {
+                  if (error) return cb(error);
+                  var latlon = geohash.decode(key.substr(SURGE_PRICING_KEY_PREFIX.length));
+                  io.emit('coords', {
+                    lat: latlon.latitude,
+                    lng: latlon.longitude,
+                    value: value
+                  });
+              });
+          });
+    }
+  });
 }
 
-updateBatchView = function(){
-  io.emit('clearView');
-}
 
 const app = express();
 const httpServer = http.createServer(app);
 const io = require('socket.io')(httpServer);
 io.sockets.on('connection', function(socket){
    socket.on('updateView', updateView);
+   socket.on('updateViewScheduled', updateViewScheduled );
+   socket.on('checkAndUpdateView', checkAndUpdateView);
+   socket.on('clearIntervalId', clearIntervalId);
 });
 
 

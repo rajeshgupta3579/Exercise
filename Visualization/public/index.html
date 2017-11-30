@@ -6,6 +6,10 @@
   <link rel="stylesheet" href="vnd/leaflet/leaflet.css">
   <link rel="stylesheet" href="css/main.css">
   <script src="vnd/leaflet/leaflet.js"></script>
+  <script
+  src="https://code.jquery.com/jquery-3.2.1.js"
+  integrity="sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE="
+  crossorigin="anonymous"></script>
 </head>
 
 <body>
@@ -14,16 +18,16 @@
     <br>
     <center>
       <label>
-        <input type="radio" name="choice" value="realTime" checked onclick="document.getElementById('timeField').disabled = true"/> <font color="white"><b>Real Time Version</b></font>
+        <input id="realTime" type="radio" name="choice" value="realTime" checked onclick="document.getElementById('timeField').disabled = true"/> <font color="white"><b>Real Time Version</b></font>
       </label>
       &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
       &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
       <label>
-        <input id='operation-type' type="radio" name="choice" value="batch" onclick="document.getElementById('timeField').disabled = false"/> <font color="white"><b>Batch Version</b></font>
+        <input id="batch" type="radio" name="choice" value="batch" onclick="document.getElementById('timeField').disabled = false"/> <font color="white"><b>Batch Version</b></font>
         &nbsp;&nbsp;&nbsp;&nbsp;
         <input type="datetime-local" id="timeField" disabled>
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-        <button type="submit" name="view" id="viewButton" onclick="updateMapView()">
+        <button type="submit" name="view" id="viewButton" onclick="updateViewBatch()">
             <span>
               <img src="img/view-icon.png" id="viewIcon">
             </span>
@@ -34,5 +38,6 @@
   </div>
   <script src="socket.io/socket.io.js"></script>
   <script src="js/main.js"></script>
+  <script src="js/geohash.js"></script>
 </body>
 </html>
