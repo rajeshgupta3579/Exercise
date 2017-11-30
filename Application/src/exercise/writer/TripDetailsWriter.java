@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.RandomUtils;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
@@ -115,7 +116,7 @@ public class TripDetailsWriter {
         // TODO Auto-generated catch block
         e.printStackTrace();
       }
-      Thread.sleep(5000);
+      Thread.sleep(RandomUtils.nextInt() % 5000);
     }
     producer.flushSync();
     log.info("Waiting for remaining puts to finish...");

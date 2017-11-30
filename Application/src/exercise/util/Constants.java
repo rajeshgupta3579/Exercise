@@ -46,6 +46,7 @@ public class Constants {
   public static final String DEMAND_KEY_PREFIX = "demand_";
   public static final String SUPPLY_KEY_PREFIX = "supply_";
   public static final String SURGE_PRICING_KEY_PREFIX = "surge_";
+  public static final String SPEED_KEY_PREFIX = "speed_";
   public static final String DELIMITER = ";;;;";
   /**
    * Data Set Paths
