@@ -14,7 +14,32 @@
 
 <body>
   <div id="map"></div>
-  <div id="footer" >
+  <div id="legendBox1">
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <span>
+      <img src="img/red-box.png">
+    </span>
+    <font color="white" size="2"><b>High Congestion. Average Speed < 20Kmph</b></font>
+    <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <span>
+      <img src="img/blue-box.png">
+    </span>
+    <font color="white" size="2"><b>Moderate Congestion. 20Kmph <= Average Speed <= 25Kmph</b></font>
+    <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <span>
+      <img src="img/green-box.png">
+    </span>
+    <font color="white" size="2"><b>Low Congestion. 25Kmph < Average Speed</b></font>
+  </div>
+  <div id="legendBox2">
+    <span>
+      <img src="img/surge-price-label.png" id="surgeIcon">
+    </span>
+    <font color="white" size="2" id="surgePriceLabel"><b>Surge Price Label</b></font>
+  </div>
+  <div id="footer">
     <br>
     <center>
       <label>
@@ -37,7 +62,7 @@
     <br>
   </div>
   <script src="socket.io/socket.io.js"></script>
-  <script src="js/main.js"></script>
   <script src="js/geohash.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

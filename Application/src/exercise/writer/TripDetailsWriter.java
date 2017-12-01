@@ -85,16 +85,18 @@ public class TripDetailsWriter {
               org.joda.time.format.DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss");
           DateTime pickupTime = DateTime.parse(fields[0], format);
           DateTime dropoffTime = DateTime.parse(fields[1], format);
-          double pickupLongitude = Double.parseDouble(fields[2]);
-          double pickupLatitude = Double.parseDouble(fields[3]);
-          double dropoffLongitude = Double.parseDouble(fields[4]);
-          double dropoffLatitude = Double.parseDouble(fields[5]);
+          Double pickupLongitude = Double.valueOf(fields[2]);
+          Double pickupLatitude = Double.valueOf(fields[3]);
+          Double dropoffLongitude = Double.valueOf(fields[4]);
+          Double dropoffLatitude = Double.valueOf(fields[5]);
           // in Km
-          double tripDistance = Double.parseDouble(fields[6]);
+          Double tripDistance = Double.valueOf(fields[6]);
           // in Hours
-          double tripTime = (dropoffTime.getMillis() - pickupTime.getMillis()) / (60 * 60 * 1000);
+          Double tripTime = Double.valueOf(dropoffTime.getMillis() - pickupTime.getMillis());
+          tripTime = tripTime / (60 * 60 * 1000);
           // in Km/Hr
-          double tripSpeed = tripDistance / tripTime;
+          Double tripSpeed = tripDistance / tripTime;
+          System.out.println(tripSpeed);
           Set<String> routeGeohashes =
               getRoute(pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude);
           String tripDetails = String.valueOf(tripSpeed) + Constants.DELIMITER
@@ -151,10 +153,16 @@ public class TripDetailsWriter {
       } else if (lng > x2 && x1 > x2) {
         lng -= Constants.LONGITUDE_ERROR;
       }
-      currentGeohash = GeoHash.getGeoHashString(lat, lng);
+      String newGeohash = GeoHash.getGeoHashString(lat, lng);
+      if(StringUtils.equals(newGeohash, currentGeohash)) {
+    	  break;
+      }
+      else { 
+    	  currentGeohash = newGeohash;
+      }
       geoHashes.add(currentGeohash);
     }
-    log.info("Success:  Route Calculated.");
+    log.info("Success:  Route Calculated. Number of GeoHashes : " + geoHashes.size());
     return geoHashes;
   }
 }

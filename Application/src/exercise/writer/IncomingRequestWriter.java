@@ -76,8 +76,8 @@ public class IncomingRequestWriter {
       try {
         if ((line = br.readLine()) != null) {
           String[] fields = line.split(",");
-          double longitude = Double.parseDouble(fields[0]);
-          double latitude = Double.parseDouble(fields[1]);
+          double longitude = Double.valueOf(fields[0]);
+          double latitude = Double.valueOf(fields[1]);
           String geo = GeoHash.getGeoHashString(latitude, longitude);
           // System.out.println(geo);
           ByteBuffer data = null;

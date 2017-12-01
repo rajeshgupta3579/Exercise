@@ -47,6 +47,7 @@ public class TripDetailsProcessor implements IRecordProcessorFactory {
           byte[] b = new byte[r.getData().remaining()];
           r.getData().get(b);
           String tripDetails = new String(b, "UTF-8");
+          System.out.println(tripDetails);
           Double tripSpeed = Double.valueOf(tripDetails.split(Constants.DELIMITER)[0]);
           List<String> routeGeohashes =
               Arrays.asList(tripDetails.split(Constants.DELIMITER)[1].split(","));
@@ -69,13 +70,13 @@ public class TripDetailsProcessor implements IRecordProcessorFactory {
     private void updateSpeedForGeoHash(String geohash, Double tripSpeed, Jedis jedis) {
       String value = jedis.get(geohash);
       if (StringUtils.isEmpty(value)) {
-        jedis.set(geohash, "1" + Constants.DELIMITER + tripSpeed.toString());
+        jedis.set(geohash, "1" + "," + tripSpeed.toString());
       } else {
-        Integer countInt = Integer.valueOf(value.split(Constants.DELIMITER)[0]);
-        Double existingSpeed = Double.valueOf(value.split(Constants.DELIMITER)[1]);
+        Integer countInt = Integer.valueOf(value.split(",")[0]);
+        Double existingSpeed = Double.valueOf(value.split(",")[1]);
         tripSpeed = existingSpeed + tripSpeed;
         jedis.set(geohash,
-            String.valueOf(countInt + 1) + Constants.DELIMITER + tripSpeed.toString());
+            String.valueOf(countInt + 1) + "," + tripSpeed.toString());
       }
       log.info("Written to Redis");
     }

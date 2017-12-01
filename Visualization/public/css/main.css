@@ -18,6 +18,30 @@ input, button{
   margin-left: -10px;
   background-color: rgba(0, 0, 0, 0.4);
 }
+#legendBox1{
+  position: fixed;
+  bottom: 0;
+  z-index: 3;
+  margin-bottom: 4px;
+  background-color: rgba(0, 0, 0, 0);
+}
+#legendBox2{
+  position: absolute;
+  right: 18%;
+  bottom: 0.5%;
+  z-index: 3;
+  margin-right: 10px;
+  background-color: rgba(0, 0, 0, 0);
+}
+#surgeIcon {
+  width: 40px;
+  height: 30px;
+}
+#surgePriceLabel {
+  position: fixed;
+  right: 11.8%;
+  bottom: 3%;
+}
 #viewIcon {
   width: 40px;
   height: 40px;

@@ -37,6 +37,7 @@ updateView = function(){
   io.emit('clearView');
   console.log("updateView");
   var SURGE_PRICING_KEY_PREFIX = 'surge_';
+  var SPEED_KEY_PREFIX = 'speed_';
   client.keys(SURGE_PRICING_KEY_PREFIX + '*', function (err, keys) {
     if (err) return console.log(err);
     if(keys){
@@ -44,10 +45,29 @@ updateView = function(){
               client.get(key, function (error, value) {
                   if (error) return cb(error);
                   var latlon = geohash.decode(key.substr(SURGE_PRICING_KEY_PREFIX.length));
-                  io.emit('coords', {
+                  io.emit('surgePriceCoordinates', {
                     lat: latlon.latitude,
                     lng: latlon.longitude,
-                    value: value
+                    value: parseFloat(value).toFixed(2)
+                  });
+              });
+          });
+    }
+  });
+  client.keys(SPEED_KEY_PREFIX + '*', function (err, keys) {
+    if (err) return console.log(err);
+    if(keys){
+          async.map(keys, function(key, cb) {
+              client.get(key, function (error, value) {
+                  if (error) return cb(error);
+                  var latlon = geohash.decode(key.substr(SPEED_KEY_PREFIX.length));
+                  var count = parseFloat(value.split(",")[0]);
+                  var sumSpeed = parseFloat(value.split(",")[1]);
+                  var averageSpeed = sumSpeed/count;
+                  io.emit('trafficCongestionCoordinates', {
+                    lat: latlon.latitude,
+                    lng: latlon.longitude,
+                    value: parseFloat(averageSpeed).toFixed(2)
                   });
               });
           });

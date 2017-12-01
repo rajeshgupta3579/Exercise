@@ -49,7 +49,10 @@ public class ScheduledProcessor {
     EXECUTOR.scheduleAtFixedRate(new Runnable() {
       @Override
       public void run() {
-        log.info("------------------------Calculating Surge Price------------------------------");
+        log.info("-----------------Calculating Surge Price and Congestion------------------------------");
+        String timeStampStart = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss").format(new Timestamp(System.currentTimeMillis()));
+        
+        //Surge Price
         List<String> driverLocations = jedis.keys(Constants.SUPPLY_KEY_PREFIX + "*").stream()
             .map(key -> jedis.get(key)).collect(Collectors.toList());
 
@@ -68,7 +71,7 @@ public class ScheduledProcessor {
           String demandValueString = jedis.get(Constants.DEMAND_KEY_PREFIX + geohash);
 
           Double demand =
-              StringUtils.isNotEmpty(demandValueString) ? Double.parseDouble(demandValueString)
+              StringUtils.isNotEmpty(demandValueString) ? Double.valueOf(demandValueString)
                   : 0.0;
 
           Double supply = supplyCountMap.get(geohash) != null ? supplyCountMap.get(geohash) : 0.0;
@@ -89,10 +92,7 @@ public class ScheduledProcessor {
             jedis.set(Constants.SURGE_PRICING_KEY_PREFIX + geohash,
                 new DecimalFormat("#0.00").format(surgePrice).toString());
 
-            String timeStampStart = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss")
-                .format(new Timestamp(System.currentTimeMillis()));
-
-            String sqlQuery = "insert into " + Constants.DB_TABLE_NAME
+            String sqlQuery = "insert into " + Constants.SURGE_PRICE_TABLE_NAME
                 + "(TimeStampStart, TimeStampEnd, GeoHash, Demand, Supply, SurgePrice) values(timestamp(\""
                 + timeStampStart + "\"), timestamp(\"" + timeStampStart + "\") + INTERVAL \'"
                 + Constants.SCHEDULED_TIME_INTERVAL.toString() + "\' "
@@ -111,6 +111,51 @@ public class ScheduledProcessor {
             }
           }
         }
+        
+        //Traffic Congestion 
+        geohashes.clear();
+        geohashes = jedis.keys(Constants.SPEED_KEY_PREFIX + "*").stream()
+                .map(key -> key.substring(Constants.SPEED_KEY_PREFIX.length()))
+                .collect(Collectors.toSet());
+        for (String geohash : geohashes) {
+        	String averageSpeedString = jedis.get(Constants.SPEED_KEY_PREFIX + geohash);
+        	if(StringUtils.isNotEmpty(averageSpeedString)) {
+	        	Double count = Double.valueOf(averageSpeedString.split(",")[0]);
+	        	Double sumSpeed = Double.valueOf(averageSpeedString.split(",")[1]);
+	        	Double averageSpeed = sumSpeed/count;
+	        	String Congestion;
+	        	
+	        	if(averageSpeed > Constants.AVERAGE_SPEED_LOWER_BOUND)
+	        		Congestion = "LOW";
+	        	else if(averageSpeed <= Constants.AVERAGE_SPEED_UPPER_BOUND && averageSpeed >= Constants.AVERAGE_SPEED_LOWER_BOUND)
+	        		Congestion = "MODERATE";
+	        	else
+	        		Congestion = "HIGH";
+	        	
+	        	System.out.println("GeoHash : " + geohash + " , Sum Speed : " + sumSpeed + " , Count : "
+	                    + count + " , Average Speed : " + averageSpeed + " , " + "Congestion : " + Congestion);
+	        	
+				String sqlQuery = "insert into " + Constants.TRAFFIC_CONGESTION_TABLE_NAME
+				     + "(TimeStampStart, TimeStampEnd, GeoHash, AverageSpeed, Congestion) values(timestamp(\""
+				     + timeStampStart + "\"), timestamp(\"" + timeStampStart + "\") + INTERVAL \'"
+				     + Constants.SCHEDULED_TIME_INTERVAL.toString() + "\' "
+				     + Constants.SCHEDULED_TIME_UNIT.toString().substring(0,
+				         Constants.SCHEDULED_TIME_UNIT.toString().length() - 1)
+				     + ", \'" + geohash + "\', " + averageSpeed.toString() + ",\'" + Congestion + "\');";
+				
+				 //log.info(sqlQuery);
+				 try {
+				   Statement st = finalConn.createStatement();
+				   st.executeUpdate(sqlQuery);
+				 } catch (SQLException e) {
+				   log.info("SQL Insert Error");
+				   e.printStackTrace();
+				 }
+	        	
+        	}
+        }
+        
+        
         log.info("Data Inserted into Database Successfully.");
         log.info("--------------------------Finished--------------------------------");
       }

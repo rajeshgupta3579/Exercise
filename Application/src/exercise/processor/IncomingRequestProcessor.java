@@ -67,7 +67,7 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
       if (StringUtils.isEmpty(count)) {
         jedis.set(geohash, "1");
       } else if (StringUtils.isNumeric(count)) {
-        Integer countInt = Integer.parseInt(count);
+        Integer countInt = Integer.valueOf(count);
         jedis.set(geohash, String.valueOf(countInt + 1));
       }
       log.info("Written to Redis");

@@ -22,12 +22,14 @@ public class Constants {
   /**
    * Constant Values
    */
-  public static final int MAX_DRIVER_COUNT = 1000;
-  public static final int MIN_DRIVER_COUNT = 100;
+  public static final int MAX_DRIVER_COUNT = 1500;
+  public static final int MIN_DRIVER_COUNT = 300;
   public static final double MIN_SURGE_MULTIPLIER = 1;
-  public static final double MAX_SURGE_MULTIPLIER = 5;
-  public static final double LATITUDE_ERROR = 0.0027 * 2;
-  public static final double LONGITUDE_ERROR = 0.0055 * 2;
+  public static final double MAX_SURGE_MULTIPLIER = 10;
+  public static final double LATITUDE_ERROR = 2*0.0027;
+  public static final double LONGITUDE_ERROR = 2*0.0055;
+  public static final int AVERAGE_SPEED_UPPER_BOUND = 25;
+  public static final int AVERAGE_SPEED_LOWER_BOUND = 20;
   /**
    * Time Interval Constants
    */
@@ -73,5 +75,6 @@ public class Constants {
   public static final String DB_USER_NAME = "grabDB";
   public static final String DB_PASSWORD = "mainkyodassa";
   public static final String DB_DRIVER_NAME = "mysql";
-  public static final String DB_TABLE_NAME = "GrabExerciseTable";
+  public static final String SURGE_PRICE_TABLE_NAME = "SurgePriceTable";
+  public static final String TRAFFIC_CONGESTION_TABLE_NAME = "TrafficCongestionTable";
 }
