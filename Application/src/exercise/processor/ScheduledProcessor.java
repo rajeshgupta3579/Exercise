@@ -25,32 +25,41 @@ public class ScheduledProcessor {
 
   private static final Logger log = LoggerFactory.getLogger(ScheduledProcessor.class);
   private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1);
+  private static long nextWeatherUpdateTimeInMillis;
+  private static String Weather = "SUNNY";
+  
   private static final JedisPool jedisPool =
       new JedisPool(Constants.REDIS_HOST, Constants.REDIS_PORT);
 
   public static void main(String[] args) {
+	  
 
     final String jdbcUrl = "jdbc:" + Constants.DB_DRIVER_NAME + "://" + Constants.DB_HOST + ":"
         + Constants.DB_PORT + "/" + Constants.DB_NAME + "?user=" + Constants.DB_USER_NAME
         + "&password=" + Constants.DB_PASSWORD;
-    Connection conn = null;
-    try {
-      conn = DriverManager.getConnection(jdbcUrl, Constants.DB_USER_NAME, Constants.DB_PASSWORD);
-    } catch (SQLException e) {
-      log.info("Database Connection Error");
-      e.printStackTrace();
-      System.exit(1);
-    }
-    log.info("Connection to Database Established Successfully.");
-    final Connection finalConn = conn;
+    
+    nextWeatherUpdateTimeInMillis = System.currentTimeMillis();
 
 
     final Jedis jedis = jedisPool.getResource();
     EXECUTOR.scheduleAtFixedRate(new Runnable() {
       @Override
       public void run() {
+    	
+    	boolean inserted = false;
+	    Connection conn = null;
+	    try {
+	      conn = DriverManager.getConnection(jdbcUrl, Constants.DB_USER_NAME, Constants.DB_PASSWORD);
+	    } catch (SQLException e) {
+	      log.info("Database Connection Error");
+	      e.printStackTrace();
+	      System.exit(1);
+	    }
+	    log.info("Connection to Database Established Successfully.");
         log.info("-----------------Calculating Surge Price and Congestion------------------------------");
-        String timeStampStart = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss").format(new Timestamp(System.currentTimeMillis()));
+
+        long currentTimestamp = System.currentTimeMillis();
+        String timeStampStart = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss").format(new Timestamp(currentTimestamp));
         
         //Surge Price
         List<String> driverLocations = jedis.keys(Constants.SUPPLY_KEY_PREFIX + "*").stream()
@@ -103,18 +112,21 @@ public class ScheduledProcessor {
 
             // log.info(sqlQuery);
             try {
-              Statement st = finalConn.createStatement();
+              Statement st = conn.createStatement();
               st.executeUpdate(sqlQuery);
+              inserted = true;
             } catch (SQLException e) {
               log.info("SQL Insert Error");
               e.printStackTrace();
             }
           }
         }
+        log.info("Surge Price Data Inserted into Database Successfully.");
         
         //Traffic Congestion 
         geohashes.clear();
-        geohashes = jedis.keys(Constants.SPEED_KEY_PREFIX + "*").stream()
+        Set<String> keys = jedis.keys(Constants.SPEED_KEY_PREFIX + "*");
+        geohashes = keys.stream()
                 .map(key -> key.substring(Constants.SPEED_KEY_PREFIX.length()))
                 .collect(Collectors.toSet());
         for (String geohash : geohashes) {
@@ -145,8 +157,9 @@ public class ScheduledProcessor {
 				
 				 //log.info(sqlQuery);
 				 try {
-				   Statement st = finalConn.createStatement();
+				   Statement st = conn.createStatement();
 				   st.executeUpdate(sqlQuery);
+				   inserted = true;
 				 } catch (SQLException e) {
 				   log.info("SQL Insert Error");
 				   e.printStackTrace();
@@ -154,10 +167,37 @@ public class ScheduledProcessor {
 	        	
         	}
         }
+        for (String key : keys) {
+            jedis.del(key);
+        } 
+        log.info("Traffic Congestion Data Inserted into Database Successfully.");
         
         
-        log.info("Data Inserted into Database Successfully.");
-        log.info("--------------------------Finished--------------------------------");
+        //Weather Data 
+        if (System.currentTimeMillis() > nextWeatherUpdateTimeInMillis) {
+        	Weather = Constants.Weathers[(int) (System.currentTimeMillis()%Constants.WeatherArraySize)];
+        	nextWeatherUpdateTimeInMillis = currentTimestamp + Constants.WEATHER_TABLE_UPDATE_INTERVAL_MILLIS;
+        }
+        if(inserted) {
+	        String sqlQuery = "insert into " + Constants.WEATHER_DATA_TABLE_NAME
+				     + "(TimeStampStart, TimeStampEnd, Weather) values(timestamp(\""
+				     + timeStampStart + "\"), timestamp(\"" + timeStampStart + "\") + INTERVAL \'"
+				     + Constants.SCHEDULED_TIME_INTERVAL.toString() + "\' "
+				     + Constants.SCHEDULED_TIME_UNIT.toString().substring(0,
+				         Constants.SCHEDULED_TIME_UNIT.toString().length() - 1)
+				     + ", \'" + Weather + "\');";
+				
+			 //log.info(sqlQuery);
+			 try {
+			   Statement st = conn.createStatement();
+			   st.executeUpdate(sqlQuery);
+			 } catch (SQLException e) {
+			   log.info("SQL Insert Error");
+			   e.printStackTrace();
+			 }
+         }
+		 log.info("Weather Data Inserted into Database Successfully.");
+		 log.info("--------------------------Finished--------------------------------");
       }
     }, 0, Constants.SCHEDULED_TIME_INTERVAL, Constants.SCHEDULED_TIME_UNIT);
   }

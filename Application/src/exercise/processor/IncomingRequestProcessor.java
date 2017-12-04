@@ -2,8 +2,9 @@ package exercise.processor;
 
 import java.util.List;
 import org.apache.commons.lang.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
@@ -22,7 +23,8 @@ import redis.clients.jedis.JedisPool;
 
 
 public class IncomingRequestProcessor implements IRecordProcessorFactory {
-  private static final Logger log = LoggerFactory.getLogger(IncomingRequestProcessor.class);
+	
+  private static final Logger log = LogManager.getLogger(IncomingRequestProcessor.class);
   private static final JedisPool jedisPool =
       new JedisPool(Constants.REDIS_HOST, Constants.REDIS_PORT);
 
@@ -41,7 +43,7 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
     @Override
     public void processRecords(List<Record> records, IRecordProcessorCheckpointer checkpointer) {
       Jedis jedis = jedisPool.getResource();
-
+      System.out.println("--------------------------------------HERE------------------------------------");
 
       for (Record r : records) {
         try {
@@ -56,6 +58,7 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
       }
 
       if (System.currentTimeMillis() > nextCheckpointTimeInMillis) {
+    	  System.out.println("--------------------------------------checkpoint HERE------------------------------------");
         checkpoint(checkpointer);
         nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;
       }
@@ -70,7 +73,8 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
         Integer countInt = Integer.valueOf(count);
         jedis.set(geohash, String.valueOf(countInt + 1));
       }
-      log.info("Written to Redis");
+      System.out.println("--------------------------------------redis------------------------------------");
+      log.debug("Written to Redis");
     }
 
     @Override
@@ -111,7 +115,9 @@ public class IncomingRequestProcessor implements IRecordProcessorFactory {
         new KinesisClientLibConfiguration(Constants.INCOMING_REQUEST_APPLICATION_NAME,
             Constants.INCOMING_REQUEST_STREAM_NAME, new DefaultAWSCredentialsProviderChain(),
             Constants.INCOMING_REQUEST_APPLICATION_NAME).withRegionName(Constants.REGION)
-                .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON);
+        .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON)
+        .withMaxRecords(10);
+
 
     final IncomingRequestProcessor consumer = new IncomingRequestProcessor();
     new Worker.Builder().recordProcessorFactory(consumer).config(config).build().run();

@@ -106,7 +106,7 @@ public class DriverLocationProcessor implements IRecordProcessorFactory {
         new KinesisClientLibConfiguration(Constants.DRIVER_LOCATION_APPLICATION_NAME,
             Constants.DRIVER_LOCATION_STREAM_NAME, new DefaultAWSCredentialsProviderChain(),
             Constants.DRIVER_LOCATION_APPLICATION_NAME).withRegionName(Constants.REGION)
-                .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON);
+        .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON);
 
     final DriverLocationProcessor consumer = new DriverLocationProcessor();
     new Worker.Builder().recordProcessorFactory(consumer).config(config).build().run();

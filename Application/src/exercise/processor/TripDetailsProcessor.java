@@ -59,7 +59,6 @@ public class TripDetailsProcessor implements IRecordProcessorFactory {
           System.exit(1);
         }
       }
-
       if (System.currentTimeMillis() > nextCheckpointTimeInMillis) {
         checkpoint(checkpointer);
         nextCheckpointTimeInMillis = System.currentTimeMillis() + CHECKPOINT_INTERVAL_MILLIS;

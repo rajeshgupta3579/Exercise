@@ -1,0 +1,6 @@
+IncomingRequests.csv :
+		Longitude,Latitude
+DriverLocations.csv : 
+		Longitude,Latitude
+TripData.csv : 
+		Pickup_DateTime,Dropoff_DateTime,Pickup_Longitude,Pickup_Latitude,Dropoff_Longitude,Dropoff_Latitude,Trip_Distance

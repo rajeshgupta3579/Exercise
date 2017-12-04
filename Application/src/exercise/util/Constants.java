@@ -51,6 +51,12 @@ public class Constants {
   public static final String SPEED_KEY_PREFIX = "speed_";
   public static final String DELIMITER = ";;;;";
   /**
+   * Weather Constants
+   */
+  public static final String Weathers[] = {"SUNNY","CLOUDS","RAINY","WIND","SNOW","STORM"};
+  public static final int WeatherArraySize = Weathers.length;
+  public static final long WEATHER_TABLE_UPDATE_INTERVAL_MILLIS = 3600000L; //1 hour
+  /**
    * Data Set Paths
    */
   private static final String DATA_SET_FOLDER_PATH = "../../Datasets/";
@@ -77,4 +83,5 @@ public class Constants {
   public static final String DB_DRIVER_NAME = "mysql";
   public static final String SURGE_PRICE_TABLE_NAME = "SurgePriceTable";
   public static final String TRAFFIC_CONGESTION_TABLE_NAME = "TrafficCongestionTable";
+  public static final String WEATHER_DATA_TABLE_NAME = "WeatherDataTable";
 }
